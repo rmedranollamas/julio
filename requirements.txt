@@ -1,0 +1,8 @@
+google-generativeai
+redis
+pydantic
+pydantic-settings
+httpx
+mcp
+python-dotenv
+fakeredis
