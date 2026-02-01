@@ -14,34 +14,36 @@ class Agent:
         self.persistence = persistence
         self.mcp_manager = mcp_manager
         self.skills_loader = skills_loader
+        self._model_cache = {}
 
         genai.configure(api_key=self.config.gemini_api_key)
-        self.model = None
-        self._setup_model()
+
+    async def _call_mcp_tool(self, server_name: str, tool_name: str, arguments_json: str) -> str:
+        """Calls a tool on a specific MCP server. arguments_json should be a JSON string of arguments."""
+        try:
+            args = json.loads(arguments_json)
+            result = await self.mcp_manager.call_tool(server_name, tool_name, args)
+            return str(result)
+        except Exception as e:
+            return f"Error calling MCP tool: {e}"
 
     def _get_all_tools(self):
-        tools = [
+        return [
             tools_internal.run_shell_command,
             tools_internal.list_files,
             tools_internal.read_file,
-            tools_internal.write_file
+            tools_internal.write_file,
+            self._call_mcp_tool
         ]
 
-        # Add a tool to call MCP tools
-        # We can't easily dynamically register dozens of functions with Gemini SDK
-        # as it expects actual function objects.
-        # So we provide a generic tool for MCP.
-        async def call_mcp_tool(server_name: str, tool_name: str, arguments_json: str) -> str:
-            """Calls a tool on a specific MCP server. arguments_json should be a JSON string of arguments."""
-            try:
-                args = json.loads(arguments_json)
-                result = await self.mcp_manager.call_tool(server_name, tool_name, args)
-                return str(result)
-            except Exception as e:
-                return f"Error calling MCP tool: {e}"
-
-        tools.append(call_mcp_tool)
-        return tools
+    async def _get_model(self, system_instruction: str):
+        if system_instruction not in self._model_cache:
+            self._model_cache[system_instruction] = genai.GenerativeModel(
+                model_name='gemini-1.5-flash',
+                tools=self._get_all_tools(),
+                system_instruction=system_instruction
+            )
+        return self._model_cache[system_instruction]
 
     async def process_command(self, source_id: str, user_id: str, content: str) -> Dict[str, Any]:
         # 1. Get history
@@ -58,15 +60,14 @@ class Agent:
             "You are a helpful agent service running on a Linux machine.\n"
             f"{skills_prompt}\n"
             f"{mcp_prompt}\n"
-            "Use the 'call_mcp_tool' function to interact with MCP servers."
+            "Use the '_call_mcp_tool' function to interact with MCP servers.\n"
+            "If you need to ask the user a question or need more information, "
+            "simply ask them in your response. End your response with [NEEDS_INPUT] "
+            "if you are waiting for user feedback before continuing a task."
         )
 
-        # 4. Create model and chat session
-        self.model = genai.GenerativeModel(
-            model_name='gemini-1.5-flash',
-            tools=self._get_all_tools(),
-            system_instruction=system_instruction
-        )
+        # 4. Get or create model
+        model = await self._get_model(system_instruction)
 
         gemini_history = []
         for h in history:
@@ -74,7 +75,7 @@ class Agent:
             gemini_history.append({'role': role, 'parts': [h['content']]})
 
         # Use automatic function calling
-        chat = self.model.start_chat(history=gemini_history, enable_automatic_function_calling=True)
+        chat = model.start_chat(history=gemini_history, enable_automatic_function_calling=True)
 
         # 4. Record user message
         self.persistence.add_history(source_id, user_id, "user", content)
@@ -90,9 +91,7 @@ class Agent:
         self.persistence.add_history(source_id, user_id, "assistant", assistant_text)
 
         # 7. Detect if user input is needed
-        # We can look for keywords or use a specific tool if we had one.
-        # For now, let's just check if the model asks a question.
-        needs_input = "?" in assistant_text
+        needs_input = "[NEEDS_INPUT]" in assistant_text
 
         return {
             "source_id": source_id,
