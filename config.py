@@ -16,7 +16,7 @@ class AgentConfig(BaseModel):
     mcp_servers: List[MCPServerConfig] = Field(default_factory=list)
     skills_path: str = "/skills"
     db_path: str = "agent.db"
-    heartbeat_interval_minutes: int = 5
+    heartbeat_interval_minutes: float = 5.0
 
 def load_config(config_path: str = "agent.json") -> AgentConfig:
     if not os.path.exists(config_path):
