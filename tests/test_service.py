@@ -27,9 +27,11 @@ async def test_agent_service():
 
         mock_agent_instance = mock_agent_wrapper.return_value
         mock_agent_instance.agent = MagicMock()
+        mock_agent_instance.initialize = AsyncMock()
         mock_agent_instance.run_with_runner = AsyncMock(return_value={"resp": "ok"})
 
         service = AgentService()
+        service.runner = mock_runner.return_value
 
         # Test command handling
         await service._handle_command({"source_id": "s", "user_id": "u", "content": "c"})

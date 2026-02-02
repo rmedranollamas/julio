@@ -17,6 +17,15 @@ class AgentService:
         self.bus = MessageBus(self.config.redis_url)
         self.skills_loader = SkillsLoader(self.config.skills_path)
         self.agent_wrapper = AgentWrapper(self.config, self.skills_loader)
+        self.runner = None
+
+        self.stop_event = asyncio.Event()
+
+    async def start(self):
+        print("Starting ADK Agent Service...")
+
+        # Initialize AgentWrapper
+        await self.agent_wrapper.initialize()
 
         # Create ADK Runner
         self.runner = Runner(
@@ -26,11 +35,6 @@ class AgentService:
             memory_service=InMemoryMemoryService(),
             artifact_service=InMemoryArtifactService()
         )
-
-        self.stop_event = asyncio.Event()
-
-    async def start(self):
-        print("Starting ADK Agent Service...")
 
         # Subscribe to commands
         await self.bus.subscribe_to_commands("agent_commands", self._handle_command)
@@ -77,7 +81,8 @@ class AgentService:
         print("Stopping Agent Service...")
         self.stop_event.set()
         await self.bus.stop()
-        await self.runner.close()
+        if self.runner:
+            await self.runner.close()
 
 async def main():
     service = AgentService()

@@ -7,9 +7,10 @@ from agent import AgentWrapper, AgentConfig
 async def test_agent_wrapper():
     config = AgentConfig(gemini_api_key="key", mcp_servers=[])
     skills_loader = MagicMock()
-    skills_loader.load_skills.return_value = "Skills"
+    skills_loader.load_skills = AsyncMock(return_value="Skills")
 
     wrapper = AgentWrapper(config, skills_loader)
+    await wrapper.initialize()
     assert wrapper.agent.name == "agent_service"
     assert "Skills" in wrapper.agent.instruction
 
@@ -17,7 +18,9 @@ async def test_agent_wrapper():
 async def test_agent_run():
     config = AgentConfig(gemini_api_key="key")
     skills_loader = MagicMock()
+    skills_loader.load_skills = AsyncMock(return_value="Skills")
     wrapper = AgentWrapper(config, skills_loader)
+    await wrapper.initialize()
 
     mock_runner = MagicMock()
     from google.adk.events import Event
