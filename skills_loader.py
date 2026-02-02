@@ -1,6 +1,6 @@
 import os
 import asyncio
-from typing import List, Dict, Optional
+from typing import List
 
 class SkillsLoader:
     def __init__(self, skills_path: str):
@@ -25,7 +25,7 @@ class SkillsLoader:
             return results
 
         # Chunk items to reduce thread overhead while maintaining responsiveness
-        chunk_size = 1000
+        chunk_size = 100
         chunks = [items[i:i + chunk_size] for i in range(0, len(items), chunk_size)]
 
         tasks = [asyncio.to_thread(_load_chunk_sync, chunk) for chunk in chunks]
