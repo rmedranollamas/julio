@@ -1,0 +1,14 @@
+google-adk
+google-genai
+redis
+pydantic
+pydantic-settings
+httpx
+mcp
+python-dotenv
+fakeredis
+aiosqlite
+sqlalchemy
+pytest
+pytest-asyncio
+coverage
