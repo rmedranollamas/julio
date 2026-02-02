@@ -16,7 +16,7 @@ class AgentService:
         self.persistence = PersistenceWrapper(self.config.db_path)
         self.bus = MessageBus(self.config.redis_url)
         self.skills_loader = SkillsLoader(self.config.skills_path)
-        self.agent_wrapper = AgentWrapper(self.config, self.skills_loader)
+        self.agent_wrapper = AgentWrapper(self.config, self.skills_loader, self.persistence)
 
         # Create ADK Runner
         self.runner = Runner(
@@ -48,10 +48,10 @@ class AgentService:
 
         print(f"Received command from {source_id}/{user_id}: {content}")
 
-        response = await self.agent_wrapper.run_with_runner(
+        response = await self.agent_wrapper.process_command(
             self.runner,
+            source_id=source_id,
             user_id=user_id,
-            session_id=source_id,
             content=content
         )
 

@@ -28,13 +28,14 @@ async def test_agent_service():
         mock_agent_instance = mock_agent_wrapper.return_value
         mock_agent_instance.agent = MagicMock()
         mock_agent_instance.run_with_runner = AsyncMock(return_value={"resp": "ok"})
+        mock_agent_instance.process_command = AsyncMock(return_value={"resp": "ok"})
 
         service = AgentService()
 
         # Test command handling
         await service._handle_command({"source_id": "s", "user_id": "u", "content": "c"})
 
-        mock_agent_instance.run_with_runner.assert_called()
+        mock_agent_instance.process_command.assert_called()
         mock_bus.return_value.publish_response.assert_called()
 
         # Test start/stop (briefly)

@@ -9,9 +9,10 @@ import tools_internal
 from config import AgentConfig
 
 class AgentWrapper:
-    def __init__(self, config: AgentConfig, skills_loader: Any):
+    def __init__(self, config: AgentConfig, skills_loader: Any, persistence: Any = None):
         self.config = config
         self.skills_loader = skills_loader
+        self.persistence = persistence
 
         # Set API key for google-genai
         os.environ["GOOGLE_API_KEY"] = self.config.gemini_api_key
@@ -46,7 +47,7 @@ class AgentWrapper:
             tools.append(toolset)
 
         # 3. Instructions from skills
-        skills_prompt = self.skills_loader.load_skills()
+        skills_prompt = self.skills_loader.load_skills_sync()
         instruction = (
             "You are a helpful agent service running on a Linux machine.\n"
             f"{skills_prompt}\n"
@@ -61,6 +62,20 @@ class AgentWrapper:
             instruction=instruction,
             tools=tools
         )
+
+    async def process_command(self, runner: Any, source_id: str, user_id: str, content: str) -> Dict[str, Any]:
+        # 1. Get history (Asynchronous Call)
+        history = []
+        if self.persistence:
+            history = await self.persistence.get_history(source_id, user_id)
+
+        # 2. Load skills context (Asynchronous Call)
+        skills_context = await self.skills_loader.load_skills()
+
+        # Log for internal use (e.g. debugging or future expansion)
+        print(f"Loaded {len(history)} history events and {len(skills_context)} chars of skills context")
+
+        return await self.run_with_runner(runner, user_id, source_id, content)
 
     async def run_with_runner(self, runner: Any, user_id: str, session_id: str, content: str) -> Dict[str, Any]:
         new_message = types.Content(

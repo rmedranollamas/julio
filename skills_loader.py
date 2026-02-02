@@ -1,11 +1,12 @@
 import os
+import asyncio
 from typing import List, Dict
 
 class SkillsLoader:
     def __init__(self, skills_path: str):
         self.skills_path = skills_path
 
-    def load_skills(self) -> str:
+    def load_skills_sync(self) -> str:
         if not os.path.exists(self.skills_path):
             return ""
 
@@ -23,6 +24,10 @@ class SkillsLoader:
             return ""
 
         return "\n\n".join(["## Available Skills", *skills_content])
+
+    async def load_skills(self) -> str:
+        # Offload blocking file I/O to a thread
+        return await asyncio.to_thread(self.load_skills_sync)
 
     def get_skill_resources(self, skill_name: str) -> Dict[str, str]:
         resources = {}
