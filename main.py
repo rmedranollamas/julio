@@ -82,6 +82,7 @@ class AgentService:
         print("Stopping Agent Service...")
         self.stop_event.set()
         await self.bus.stop()
+        await self.mcp_manager.stop()
         await self.runner.close()
         await self.mcp_manager.stop()
 

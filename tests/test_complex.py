@@ -9,7 +9,8 @@ async def test_agent_wrapper():
     config = AgentConfig(gemini_api_key="key", mcp_servers=[])
     skills_loader = MagicMock()
     skills_loader.load_skills.return_value = "Skills"
-    mcp_manager = MCPManager([])
+    mcp_manager = MagicMock()
+    mcp_manager.get_toolsets.return_value = []
 
     wrapper = AgentWrapper(config, skills_loader, mcp_manager)
     assert wrapper.agent.name == "agent_service"
@@ -19,7 +20,8 @@ async def test_agent_wrapper():
 async def test_agent_run():
     config = AgentConfig(gemini_api_key="key")
     skills_loader = MagicMock()
-    mcp_manager = MCPManager([])
+    mcp_manager = MagicMock()
+    mcp_manager.get_toolsets.return_value = []
     wrapper = AgentWrapper(config, skills_loader, mcp_manager)
 
     mock_runner = MagicMock()

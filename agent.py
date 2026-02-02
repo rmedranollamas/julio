@@ -28,8 +28,7 @@ class AgentWrapper:
             tools_internal.write_file
         ]
 
-        # 2. MCP Toolsets
-        # Reuse managed toolsets from MCPManager
+        # 2. MCP Toolsets from Manager
         tools.extend(self.mcp_manager.get_toolsets())
 
         # 3. Instructions from skills

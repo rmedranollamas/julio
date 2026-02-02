@@ -1,106 +1,106 @@
 import asyncio
 import logging
-from typing import List, Dict, Optional
-from google.adk.tools.mcp_tool.mcp_toolset import McpToolset, StdioConnectionParams, SseConnectionParams
+from typing import List, Dict, Optional, Tuple
 from mcp import StdioServerParameters
+from google.adk.tools.mcp_tool.mcp_toolset import (
+    McpToolset,
+    StdioConnectionParams,
+    SseConnectionParams
+)
 from config import MCPServerConfig
 
 logger = logging.getLogger(__name__)
 
 class MCPManager:
     """
-    Manages MCP (Model Context Protocol) toolsets and their sessions.
-    Provides proactive health checks and reconnection logic for robust stdio connections.
+    Manages dedicated tasks for MCP services to keep their contexts open.
     """
-    def __init__(self, configs: List[MCPServerConfig]):
-        self.configs = configs
-        self.toolsets: Dict[str, McpToolset] = {}
-        self._health_check_task: Optional[asyncio.Task] = None
-        self._initialize_toolsets()
+    def __init__(self, mcp_configs: List[MCPServerConfig]):
+        self.configs = mcp_configs
+        self.managed_servers: List[Tuple[McpToolset, str]] = []
+        self._tasks: List[asyncio.Task] = []
+        self._stop_event = asyncio.Event()
 
-    def _initialize_toolsets(self):
-        """Initializes toolsets based on the provided configurations."""
-        for cfg in self.configs:
+        # Initialize toolsets
+        for config in self.configs:
             try:
-                if cfg.type == "stdio":
-                    # Stdio connection needs to be managed carefully with contexts
-                    # Reusing ADK primitives: StdioConnectionParams wraps StdioServerParameters
+                if config.type == "stdio":
+                    if not config.command:
+                        logger.warning(f"MCP server {config.name} is type 'stdio' but missing command. Skipping.")
+                        continue
+
+                    # Note: Original code used (command=..., args=...) but library
+                    # source shows it requires server_params: StdioServerParameters.
                     params = StdioConnectionParams(
                         server_params=StdioServerParameters(
-                            command=cfg.command,
-                            args=cfg.args
+                            command=config.command,
+                            args=config.args
                         )
                     )
-                elif cfg.type == "sse":
-                    params = SseConnectionParams(
-                        url=cfg.url
-                    )
+                elif config.type == "sse":
+                    if not config.url:
+                        logger.warning(f"MCP server {config.name} is type 'sse' but missing url. Skipping.")
+                        continue
+                    params = SseConnectionParams(url=config.url)
                 else:
-                    logger.error(f"Unsupported MCP server type: {cfg.type} for server {cfg.name}")
+                    logger.warning(f"Unknown MCP server type '{config.type}' for {config.name}. Skipping.")
                     continue
 
                 toolset = McpToolset(
                     connection_params=params,
-                    tool_name_prefix=f"{cfg.name}_"
+                    tool_name_prefix=f"{config.name}_"
                 )
-                self.toolsets[cfg.name] = toolset
+                self.managed_servers.append((toolset, config.name))
             except Exception as e:
-                logger.error(f"Failed to initialize toolset for MCP server {cfg.name}: {e}")
+                logger.error(f"Failed to initialize toolset for {config.name}: {e}")
 
     async def start(self):
-        """Starts the MCP Manager, attempting initial connections and starting the health check loop."""
-        logger.info("Starting MCP Manager...")
+        """Starts dedicated tasks for each MCP service."""
+        for toolset, name in self.managed_servers:
+            task = asyncio.create_task(self._keep_alive(toolset, name))
+            self._tasks.append(task)
+        logger.info(f"Started {len(self._tasks)} MCP keep-alive tasks.")
 
-        # Proactively attempt to initialize connections to each MCP server
-        for name, toolset in self.toolsets.items():
+    async def _keep_alive(self, toolset: McpToolset, name: str):
+        """Dedicated task to keep the MCP session open."""
+        logger.info(f"Starting dedicated keep-alive task for MCP server: {name}")
+        while not self._stop_event.is_set():
             try:
-                # Calling get_tools() triggers the MCP session creation and initialization
+                # Use public get_tools() to ensure connection is established and alive.
+                # This avoids relying on private attributes of McpToolset.
                 await toolset.get_tools()
-                logger.info(f"Successfully initialized MCP server: {name}")
-            except Exception as e:
-                # We don't want to block startup if an MCP server is down,
-                # health check and reactive reconnection will handle it later.
-                logger.warning(f"Initial connection to MCP server {name} failed: {e}. Will retry in background.")
 
-        # Start the proactive health check loop to keep connections alive
-        self._health_check_task = asyncio.create_task(self._health_check_loop())
-
-    async def _health_check_loop(self):
-        """Periodically verifies that connections are alive and triggers reconnection if needed."""
-        while True:
-            try:
-                await asyncio.sleep(60) # Health check interval: 1 minute
-                for name, toolset in self.toolsets.items():
-                    try:
-                        # get_tools() will check if the session is still active
-                        # and reconnect if it has been closed or crashed.
-                        await toolset.get_tools()
-                        logger.debug(f"MCP server {name} health check passed.")
-                    except Exception as e:
-                        logger.error(f"MCP server {name} health check failed: {e}")
+                # Wait for next check or stop event
+                try:
+                    await asyncio.wait_for(self._stop_event.wait(), timeout=30)
+                    break # Stop event set
+                except asyncio.TimeoutError:
+                    pass # Continue loop
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                logger.error(f"Error in MCP health check loop: {e}")
-
-    async def stop(self):
-        """Stops the health check loop and closes all MCP toolsets."""
-        logger.info("Stopping MCP Manager...")
-        if self._health_check_task:
-            self._health_check_task.cancel()
-            try:
-                await self._health_check_task
-            except asyncio.CancelledError:
-                pass
-
-        # Properly close each toolset to release resources (like child processes)
-        for name, toolset in self.toolsets.items():
-            try:
-                await toolset.close()
-                logger.info(f"Closed MCP toolset: {name}")
-            except Exception as e:
-                logger.error(f"Error closing MCP toolset {name}: {e}")
+                if self._stop_event.is_set():
+                    break
+                logger.error(f"Error in MCP keep-alive for {name}: {e}. Retrying in 5s...")
+                try:
+                    await asyncio.wait_for(self._stop_event.wait(), timeout=5)
+                except asyncio.TimeoutError:
+                    pass
+                except asyncio.CancelledError:
+                    break
 
     def get_toolsets(self) -> List[McpToolset]:
-        """Returns all managed McpToolset instances."""
-        return list(self.toolsets.values())
+        """Returns the list of managed toolsets."""
+        return [toolset for toolset, _ in self.managed_servers]
+
+    async def stop(self):
+        """Stops all dedicated tasks and closes toolsets."""
+        self._stop_event.set()
+        for task in self._tasks:
+            task.cancel()
+        if self._tasks:
+            await asyncio.gather(*self._tasks, return_exceptions=True)
+
+        for toolset, _ in self.managed_servers:
+            await toolset.close()
+        logger.info("Stopped all MCP keep-alive tasks and closed sessions.")
