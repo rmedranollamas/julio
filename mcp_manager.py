@@ -29,6 +29,8 @@ class MCPManager:
                         logger.warning(f"MCP server {config.name} is type 'stdio' but missing command. Skipping.")
                         continue
 
+                    # Note: Original code used (command=..., args=...) but library
+                    # source shows it requires server_params: StdioServerParameters.
                     params = StdioConnectionParams(
                         server_params=StdioServerParameters(
                             command=config.command,
@@ -64,23 +66,28 @@ class MCPManager:
         logger.info(f"Starting dedicated keep-alive task for MCP server: {name}")
         while not self._stop_event.is_set():
             try:
-                # create_session will establish or return the existing session.
-                # It uses AsyncExitStack internally to keep the context open.
-                session = await toolset._mcp_session_manager.create_session()
+                # Use public get_tools() to ensure connection is established and alive.
+                # This avoids relying on private attributes of McpToolset.
+                await toolset.get_tools()
 
-                # Monitor the session
-                while not self._stop_event.is_set():
-                    if toolset._mcp_session_manager._is_session_disconnected(session):
-                        logger.warning(f"MCP server {name} disconnected. Attempting to reconnect...")
-                        break
-                    await asyncio.sleep(10) # Check every 10 seconds
+                # Wait for next check or stop event
+                try:
+                    await asyncio.wait_for(self._stop_event.wait(), timeout=30)
+                    break # Stop event set
+                except asyncio.TimeoutError:
+                    pass # Continue loop
             except asyncio.CancelledError:
                 break
             except Exception as e:
                 if self._stop_event.is_set():
                     break
                 logger.error(f"Error in MCP keep-alive for {name}: {e}. Retrying in 5s...")
-                await asyncio.sleep(5)
+                try:
+                    await asyncio.wait_for(self._stop_event.wait(), timeout=5)
+                except asyncio.TimeoutError:
+                    pass
+                except asyncio.CancelledError:
+                    break
 
     def get_toolsets(self) -> List[McpToolset]:
         """Returns the list of managed toolsets."""
