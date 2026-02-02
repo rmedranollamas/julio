@@ -24,7 +24,8 @@ class AgentWrapper:
             tools_internal.run_shell_command,
             tools_internal.list_files,
             tools_internal.read_file,
-            tools_internal.write_file
+            tools_internal.write_file,
+            tools_internal.request_user_input
         ]
 
         # 2. MCP Toolsets
@@ -50,9 +51,10 @@ class AgentWrapper:
         instruction = (
             "You are a helpful agent service running on a Linux machine.\n"
             f"{skills_prompt}\n"
-            "If you need to ask the user a question or need more information, "
-            "simply ask them in your response. End your response with [NEEDS_INPUT] "
-            "if you are waiting for user feedback before continuing a task."
+            "If you need more information from the user or need them to make a decision, "
+            "use the `request_user_input` tool. "
+            "Alternatively, if you are simply waiting for user feedback before continuing, "
+            "end your response with [NEEDS_INPUT]."
         )
 
         return LlmAgent(
@@ -69,6 +71,7 @@ class AgentWrapper:
         )
 
         assistant_text = ""
+        needs_input = False
         async for event in runner.run_async(
             user_id=user_id,
             session_id=session_id,
@@ -78,8 +81,15 @@ class AgentWrapper:
                 for part in event.content.parts:
                     if part.text:
                         assistant_text += part.text
+                    if part.function_call and part.function_call.name == "request_user_input":
+                        needs_input = True
+                        if "question" in part.function_call.args:
+                            q = part.function_call.args["question"]
+                            if q not in assistant_text:
+                                assistant_text += f"\n{q}"
 
-        needs_input = "[NEEDS_INPUT]" in assistant_text
+        if "[NEEDS_INPUT]" in assistant_text:
+            needs_input = True
 
         return {
             "source_id": session_id,
