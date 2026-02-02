@@ -3,7 +3,7 @@ import signal
 import os
 from config import load_config
 from bus import MessageBus
-from persistence import PersistenceWrapper
+from persistence import Persistence
 from skills_loader import SkillsLoader
 from agent import AgentWrapper
 from google.adk.runners import Runner
@@ -13,7 +13,7 @@ from google.adk.artifacts.in_memory_artifact_service import InMemoryArtifactServ
 class AgentService:
     def __init__(self, config_path: str = "agent.json"):
         self.config = load_config(config_path)
-        self.persistence = PersistenceWrapper(self.config.db_path)
+        self.persistence = Persistence(self.config.db_path)
         self.bus = MessageBus(self.config.redis_url)
         self.skills_loader = SkillsLoader(self.config.skills_path)
         self.agent_wrapper = AgentWrapper(self.config, self.skills_loader)
@@ -78,6 +78,7 @@ class AgentService:
         self.stop_event.set()
         await self.bus.stop()
         await self.runner.close()
+        await self.persistence.close()
 
 async def main():
     service = AgentService()

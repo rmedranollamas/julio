@@ -6,7 +6,7 @@ from main import AgentService
 @pytest.mark.asyncio
 async def test_agent_service():
     with patch('main.load_config') as mock_load_config, \
-         patch('main.PersistenceWrapper') as mock_persistence, \
+         patch('main.Persistence') as mock_persistence, \
          patch('main.MessageBus', return_value=AsyncMock()) as mock_bus, \
          patch('main.SkillsLoader') as mock_skills, \
          patch('main.AgentWrapper') as mock_agent_wrapper, \
@@ -24,6 +24,7 @@ async def test_agent_service():
         # Mocking persistence and agent
         mock_persistence_instance = mock_persistence.return_value
         mock_persistence_instance.session_service = MagicMock()
+        mock_persistence_instance.close = AsyncMock()
 
         mock_agent_instance = mock_agent_wrapper.return_value
         mock_agent_instance.agent = MagicMock()
