@@ -75,9 +75,9 @@ class AgentWrapper:
         # Log for internal use (e.g. debugging or future expansion)
         print(f"Loaded {len(history)} history events and {len(skills_context)} chars of skills context")
 
-        return await self.run_with_runner(runner, user_id, source_id, content)
+        return await self.run_with_runner(runner, user_id, source_id, content, history, skills_context)
 
-    async def run_with_runner(self, runner: Any, user_id: str, session_id: str, content: str) -> Dict[str, Any]:
+    async def run_with_runner(self, runner: Any, user_id: str, session_id: str, content: str, history: List[Any] = None, skills_context: str = None) -> Dict[str, Any]:
         new_message = types.Content(
             role="user",
             parts=[types.Part(text=content)]

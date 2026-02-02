@@ -78,6 +78,7 @@ class AgentService:
         self.stop_event.set()
         await self.bus.stop()
         await self.runner.close()
+        await self.persistence.close()
 
 async def main():
     service = AgentService()
