@@ -51,9 +51,10 @@ async def test_bus():
     await bus.stop()
 
 # Internal Tools Tests
-def test_tools_internal(tmp_path):
+@pytest.mark.asyncio
+async def test_tools_internal(tmp_path):
     test_file = tmp_path / "test.txt"
-    assert "Successfully wrote" in write_file(str(test_file), "hello")
-    assert read_file(str(test_file)) == "hello"
-    assert str(test_file.name) in list_files(str(tmp_path))
-    assert "STDOUT:\nechoed\n" in run_shell_command("echo echoed")
+    assert "Successfully wrote" in await write_file(str(test_file), "hello")
+    assert await read_file(str(test_file)) == "hello"
+    assert str(test_file.name) in await list_files(str(tmp_path))
+    assert "STDOUT:\nechoed\n" in await run_shell_command("echo echoed")
