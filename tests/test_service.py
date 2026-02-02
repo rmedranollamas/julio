@@ -6,11 +6,11 @@ from main import AgentService
 @pytest.mark.asyncio
 async def test_agent_service():
     with patch('main.load_config') as mock_load_config, \
-         patch('main.Persistence') as mock_persistence, \
+         patch('main.PersistenceWrapper') as mock_persistence, \
          patch('main.MessageBus', return_value=AsyncMock()) as mock_bus, \
-         patch('main.MCPManager', return_value=AsyncMock()) as mock_mcp, \
          patch('main.SkillsLoader') as mock_skills, \
-         patch('main.Agent') as mock_agent:
+         patch('main.AgentWrapper') as mock_agent_wrapper, \
+         patch('main.Runner', return_value=AsyncMock()) as mock_runner:
 
         # Setup config mock
         config = MagicMock()
@@ -21,19 +21,23 @@ async def test_agent_service():
         config.heartbeat_interval_minutes = 0.001 # very short for test
         mock_load_config.return_value = config
 
+        # Mocking persistence and agent
+        mock_persistence_instance = mock_persistence.return_value
+        mock_persistence_instance.session_service = MagicMock()
+
+        mock_agent_instance = mock_agent_wrapper.return_value
+        mock_agent_instance.agent = MagicMock()
+        mock_agent_instance.run_with_runner = AsyncMock(return_value={"resp": "ok"})
+
         service = AgentService()
 
         # Test command handling
-        mock_agent_instance = mock_agent.return_value
-        mock_agent_instance.process_command = AsyncMock(return_value={"resp": "ok"})
-
         await service._handle_command({"source_id": "s", "user_id": "u", "content": "c"})
 
-        mock_agent_instance.process_command.assert_called()
+        mock_agent_instance.run_with_runner.assert_called()
         mock_bus.return_value.publish_response.assert_called()
 
         # Test start/stop (briefly)
-        # We'll use a timeout to avoid hanging if the service doesn't stop
         service.stop_event = MagicMock()
         service.stop_event.wait = AsyncMock()
 
@@ -41,9 +45,8 @@ async def test_agent_service():
         service.heartbeat_loop = AsyncMock()
 
         await service.start()
-        mock_mcp.return_value.start.assert_called()
         mock_bus.return_value.subscribe_to_commands.assert_called()
 
         await service.stop()
-        mock_mcp.return_value.stop.assert_called()
         mock_bus.return_value.stop.assert_called()
+        mock_runner.return_value.close.assert_called()

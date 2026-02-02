@@ -1,12 +1,13 @@
 import asyncio
 import json
+import os
 import fakeredis.aioredis as fakeredis
 from unittest.mock import AsyncMock, patch, MagicMock
 from main import AgentService
 from config import AgentConfig
 
 async def run_demo():
-    print("--- Starting Agent Service Demo ---")
+    print("--- Starting ADK Agent Service Demo ---")
 
     # 1. Setup Mock Config
     config = AgentConfig(
@@ -18,28 +19,24 @@ async def run_demo():
     # 2. Setup Mocks
     with patch('main.load_config', return_value=config), \
          patch('bus.redis.from_url') as mock_redis_from_url, \
-         patch('google.generativeai.GenerativeModel') as mock_model_class:
+         patch('google.adk.runners.Runner.run_async') as mock_run_async:
 
         # Fake Redis
         fake_redis = fakeredis.FakeRedis(decode_responses=True)
         mock_redis_from_url.return_value = fake_redis
 
-        # Mock Gemini
-        mock_model = MagicMock()
-        mock_model_class.return_value = mock_model
-        mock_chat = AsyncMock()
-        mock_model.start_chat.return_value = mock_chat
+        # Mock ADK Runner output
+        async def mock_runner_gen(*args, **kwargs):
+            from google.adk.events import Event
+            from google.genai import types
+            event = Event(
+                invocation_id="test",
+                author="agent_service",
+                content=types.Content(parts=[types.Part(text="I am the ADK agent. [NEEDS_INPUT]")])
+            )
+            yield event
 
-        # Define how the mock agent responds
-        async def mock_send_message(content):
-            resp = MagicMock()
-            if "files" in content:
-                resp.text = "I see several files here: agent.py, main.py, etc. [NEEDS_INPUT]"
-            else:
-                resp.text = f"I received your message: '{content}'. How can I help? [NEEDS_INPUT]"
-            return resp
-
-        mock_chat.send_message_async.side_effect = mock_send_message
+        mock_run_async.side_effect = mock_runner_gen
 
         # 3. Initialize Service
         service = AgentService()
@@ -53,11 +50,11 @@ async def run_demo():
         pubsub = client_redis.pubsub()
         await pubsub.subscribe("agent_responses")
 
-        print("Client: Sending command 'list my files'...")
+        print("Client: Sending command 'hello'...")
         await client_redis.publish("agent_commands", json.dumps({
-            "source_id": "demo_chat",
-            "user_id": "jules_user",
-            "content": "Please list my files"
+            "source_id": "demo_session_1",
+            "user_id": "demo_user",
+            "content": "hello"
         }))
 
         # 5. Listen for Response
@@ -72,11 +69,7 @@ async def run_demo():
                 break
             await asyncio.sleep(0.1)
 
-        # 6. Test Heartbeat (it should trigger after ~0.6 seconds due to interval=0.01)
-        print("Waiting for heartbeat...")
-        await asyncio.sleep(1.0)
-
-        # 7. Cleanup
+        # 6. Cleanup
         print("Stopping demo...")
         await service.stop()
         await service_task

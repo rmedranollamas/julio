@@ -1,100 +1,88 @@
-import google.generativeai as genai
-from typing import List, Dict, Any, Optional
 import json
-import asyncio
-from config import AgentConfig
-from persistence import Persistence
-from mcp_manager import MCPManager
-from skills_loader import SkillsLoader
+import os
+from typing import List, Dict, Any, Optional
+from google.adk.agents import LlmAgent
+from google.adk.tools.mcp_tool.mcp_toolset import McpToolset, StdioConnectionParams, SseConnectionParams
+from google.adk.events import Event
+from google.genai import types
 import tools_internal
+from config import AgentConfig
 
-class Agent:
-    def __init__(self, config: AgentConfig, persistence: Persistence, mcp_manager: MCPManager, skills_loader: SkillsLoader):
+class AgentWrapper:
+    def __init__(self, config: AgentConfig, skills_loader: Any):
         self.config = config
-        self.persistence = persistence
-        self.mcp_manager = mcp_manager
         self.skills_loader = skills_loader
-        self._model_cache = {}
 
-        genai.configure(api_key=self.config.gemini_api_key)
+        # Set API key for google-genai
+        os.environ["GOOGLE_API_KEY"] = self.config.gemini_api_key
 
-    async def _call_mcp_tool(self, server_name: str, tool_name: str, arguments_json: str) -> str:
-        """Calls a tool on a specific MCP server. arguments_json should be a JSON string of arguments."""
-        try:
-            args = json.loads(arguments_json)
-            result = await self.mcp_manager.call_tool(server_name, tool_name, args)
-            return str(result)
-        except Exception as e:
-            return f"Error calling MCP tool: {e}"
+        self.agent = self._create_agent()
 
-    def _get_all_tools(self):
-        return [
+    def _create_agent(self) -> LlmAgent:
+        # 1. Internal tools
+        tools = [
             tools_internal.run_shell_command,
             tools_internal.list_files,
             tools_internal.read_file,
-            tools_internal.write_file,
-            self._call_mcp_tool
+            tools_internal.write_file
         ]
 
-    async def _get_model(self, system_instruction: str):
-        if system_instruction not in self._model_cache:
-            self._model_cache[system_instruction] = genai.GenerativeModel(
-                model_name='gemini-1.5-flash',
-                tools=self._get_all_tools(),
-                system_instruction=system_instruction
+        # 2. MCP Toolsets
+        for mcp_cfg in self.config.mcp_servers:
+            if mcp_cfg.type == "stdio":
+                params = StdioConnectionParams(
+                    command=mcp_cfg.command,
+                    args=mcp_cfg.args
+                )
+            else:
+                params = SseConnectionParams(
+                    url=mcp_cfg.url
+                )
+
+            toolset = McpToolset(
+                connection_params=params,
+                tool_name_prefix=f"{mcp_cfg.name}_"
             )
-        return self._model_cache[system_instruction]
+            tools.append(toolset)
 
-    async def process_command(self, source_id: str, user_id: str, content: str) -> Dict[str, Any]:
-        # 1. Get history
-        history = self.persistence.get_history(source_id, user_id)
-
-        # 2. Load skills context
+        # 3. Instructions from skills
         skills_prompt = self.skills_loader.load_skills()
-
-        # 3. List available MCP tools for the system prompt
-        mcp_tools = await self.mcp_manager.list_tools()
-        mcp_prompt = "\nAvailable MCP Tools:\n" + json.dumps(mcp_tools, indent=2)
-
-        system_instruction = (
+        instruction = (
             "You are a helpful agent service running on a Linux machine.\n"
             f"{skills_prompt}\n"
-            f"{mcp_prompt}\n"
-            "Use the '_call_mcp_tool' function to interact with MCP servers.\n"
             "If you need to ask the user a question or need more information, "
             "simply ask them in your response. End your response with [NEEDS_INPUT] "
             "if you are waiting for user feedback before continuing a task."
         )
 
-        # 4. Get or create model
-        model = await self._get_model(system_instruction)
+        return LlmAgent(
+            name="agent_service",
+            model="gemini-1.5-flash",
+            instruction=instruction,
+            tools=tools
+        )
 
-        gemini_history = []
-        for h in history:
-            role = 'user' if h['role'] == 'user' else 'model'
-            gemini_history.append({'role': role, 'parts': [h['content']]})
+    async def run_with_runner(self, runner: Any, user_id: str, session_id: str, content: str) -> Dict[str, Any]:
+        new_message = types.Content(
+            role="user",
+            parts=[types.Part(text=content)]
+        )
 
-        # Use automatic function calling
-        chat = model.start_chat(history=gemini_history, enable_automatic_function_calling=True)
+        assistant_text = ""
+        async for event in runner.run_async(
+            user_id=user_id,
+            session_id=session_id,
+            new_message=new_message
+        ):
+            if event.author == self.agent.name and event.content:
+                for part in event.content.parts:
+                    if part.text:
+                        assistant_text += part.text
 
-        # 4. Record user message
-        self.persistence.add_history(source_id, user_id, "user", content)
-
-        # 5. Process with Gemini
-        try:
-            response = await chat.send_message_async(content)
-            assistant_text = response.text
-        except Exception as e:
-            assistant_text = f"Error: {e}"
-
-        # 6. Record assistant response
-        self.persistence.add_history(source_id, user_id, "assistant", assistant_text)
-
-        # 7. Detect if user input is needed
         needs_input = "[NEEDS_INPUT]" in assistant_text
 
         return {
-            "source_id": source_id,
+            "source_id": session_id,
             "user_id": user_id,
             "content": assistant_text,
             "needs_input": needs_input
