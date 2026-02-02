@@ -1,11 +1,44 @@
 import os
-from typing import List, Dict
+import threading
+from typing import List, Dict, Optional
+from watchdog.observers import Observer
+from watchdog.events import FileSystemEventHandler
+
+class SkillChangeHandler(FileSystemEventHandler):
+    def __init__(self, loader: 'SkillsLoader'):
+        self.loader = loader
+
+    def on_any_event(self, event):
+        if not event.is_directory:
+            self.loader.clear_cache()
 
 class SkillsLoader:
     def __init__(self, skills_path: str):
         self.skills_path = skills_path
+        self._cache_load_skills: Optional[str] = None
+        self._cache_resources: Dict[str, Dict[str, str]] = {}
+        self._lock = threading.Lock()
+
+        self.observer = Observer()
+        self.event_handler = SkillChangeHandler(self)
+        if os.path.exists(self.skills_path):
+            self.observer.schedule(self.event_handler, self.skills_path, recursive=True)
+            self.observer.start()
+
+    def clear_cache(self):
+        with self._lock:
+            self._cache_load_skills = None
+            self._cache_resources = {}
+
+    def stop(self):
+        self.observer.stop()
+        self.observer.join()
 
     def load_skills(self) -> str:
+        with self._lock:
+            if self._cache_load_skills is not None:
+                return self._cache_load_skills
+
         if not os.path.exists(self.skills_path):
             return ""
 
@@ -20,11 +53,19 @@ class SkillsLoader:
                         skills_content.append(f"### Skill: {item}\n{content}")
 
         if not skills_content:
-            return ""
+            result = ""
+        else:
+            result = "\n\n".join(["## Available Skills", *skills_content])
 
-        return "\n\n".join(["## Available Skills", *skills_content])
+        with self._lock:
+            self._cache_load_skills = result
+        return result
 
     def get_skill_resources(self, skill_name: str) -> Dict[str, str]:
+        with self._lock:
+            if skill_name in self._cache_resources:
+                return self._cache_resources[skill_name]
+
         resources = {}
         skill_path = os.path.join(self.skills_path, skill_name)
         if os.path.isdir(skill_path):
@@ -38,4 +79,7 @@ class SkillsLoader:
                         except:
                             # Skip binary or unreadable files
                             pass
+
+        with self._lock:
+            self._cache_resources[skill_name] = resources
         return resources
