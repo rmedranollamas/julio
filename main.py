@@ -16,7 +16,15 @@ class AgentService:
         self.persistence = PersistenceWrapper(self.config.db_path)
         self.bus = MessageBus(self.config.redis_url)
         self.skills_loader = SkillsLoader(self.config.skills_path)
-        self.agent_wrapper = AgentWrapper(self.config, self.skills_loader)
+        self.agent_wrapper = None
+        self.runner = None
+        self.stop_event = asyncio.Event()
+
+    async def start(self):
+        print("Starting ADK Agent Service...")
+
+        # Async initialization
+        self.agent_wrapper = await AgentWrapper.create(self.config, self.skills_loader)
 
         # Create ADK Runner
         self.runner = Runner(
@@ -26,11 +34,6 @@ class AgentService:
             memory_service=InMemoryMemoryService(),
             artifact_service=InMemoryArtifactService()
         )
-
-        self.stop_event = asyncio.Event()
-
-    async def start(self):
-        print("Starting ADK Agent Service...")
 
         # Subscribe to commands
         await self.bus.subscribe_to_commands("agent_commands", self._handle_command)
@@ -47,6 +50,10 @@ class AgentService:
         content = data.get("content", "")
 
         print(f"Received command from {source_id}/{user_id}: {content}")
+
+        if not self.agent_wrapper or not self.runner:
+            print("Error: Agent not initialized")
+            return
 
         response = await self.agent_wrapper.run_with_runner(
             self.runner,
@@ -77,7 +84,8 @@ class AgentService:
         print("Stopping Agent Service...")
         self.stop_event.set()
         await self.bus.stop()
-        await self.runner.close()
+        if self.runner:
+            await self.runner.close()
 
 async def main():
     service = AgentService()
