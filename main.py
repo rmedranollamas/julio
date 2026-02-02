@@ -6,6 +6,7 @@ from bus import MessageBus
 from persistence import PersistenceWrapper
 from skills_loader import SkillsLoader
 from agent import AgentWrapper
+from mcp_manager import MCPManager
 from google.adk.runners import Runner
 from google.adk.memory.in_memory_memory_service import InMemoryMemoryService
 from google.adk.artifacts.in_memory_artifact_service import InMemoryArtifactService
@@ -16,7 +17,8 @@ class AgentService:
         self.persistence = PersistenceWrapper(self.config.db_path)
         self.bus = MessageBus(self.config.redis_url)
         self.skills_loader = SkillsLoader(self.config.skills_path)
-        self.agent_wrapper = AgentWrapper(self.config, self.skills_loader)
+        self.mcp_manager = MCPManager(self.config.mcp_servers)
+        self.agent_wrapper = AgentWrapper(self.config, self.skills_loader, self.mcp_manager)
 
         # Create ADK Runner
         self.runner = Runner(
@@ -31,6 +33,9 @@ class AgentService:
 
     async def start(self):
         print("Starting ADK Agent Service...")
+
+        # Start MCP Manager
+        await self.mcp_manager.start()
 
         # Subscribe to commands
         await self.bus.subscribe_to_commands("agent_commands", self._handle_command)
@@ -78,6 +83,7 @@ class AgentService:
         self.stop_event.set()
         await self.bus.stop()
         await self.runner.close()
+        await self.mcp_manager.stop()
 
 async def main():
     service = AgentService()
