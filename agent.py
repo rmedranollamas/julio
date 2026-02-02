@@ -6,9 +6,10 @@ from google.adk.events import Event
 from google.genai import types
 import tools_internal
 from config import AgentConfig
+from mcp_manager import MCPManager
 
 class AgentWrapper:
-    def __init__(self, config: AgentConfig, skills_loader: Any, mcp_manager: Any):
+    def __init__(self, config: AgentConfig, skills_loader: Any, mcp_manager: MCPManager):
         self.config = config
         self.skills_loader = skills_loader
         self.mcp_manager = mcp_manager

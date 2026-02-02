@@ -17,10 +17,7 @@ class AgentService:
         self.persistence = PersistenceWrapper(self.config.db_path)
         self.bus = MessageBus(self.config.redis_url)
         self.skills_loader = SkillsLoader(self.config.skills_path)
-
-        # Initialize MCP Manager
         self.mcp_manager = MCPManager(self.config.mcp_servers)
-
         self.agent_wrapper = AgentWrapper(self.config, self.skills_loader, self.mcp_manager)
 
         # Create ADK Runner
@@ -87,6 +84,7 @@ class AgentService:
         await self.bus.stop()
         await self.mcp_manager.stop()
         await self.runner.close()
+        await self.mcp_manager.stop()
 
 async def main():
     service = AgentService()

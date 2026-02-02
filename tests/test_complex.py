@@ -2,6 +2,7 @@ import pytest
 import asyncio
 from unittest.mock import AsyncMock, patch, MagicMock
 from agent import AgentWrapper, AgentConfig
+from mcp_manager import MCPManager
 
 @pytest.mark.asyncio
 async def test_agent_wrapper():
