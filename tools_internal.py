@@ -14,6 +14,13 @@ async def run_shell_command(command: str) -> str:
         return f"STDOUT:\n{stdout.decode()}\nSTDERR:\n{stderr.decode()}"
     except asyncio.TimeoutError:
         return "Error: Command timed out"
+        try:
+            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout)
+            return f"STDOUT:\n{stdout.decode()}\nSTDERR:\n{stderr.decode()}"
+        except asyncio.TimeoutError:
+            process.kill()
+            await process.wait()
+            return f"Error: Command timed out after {timeout} seconds"
     except Exception as e:
         return f"Error executing command: {str(e)}"
 
@@ -45,3 +52,7 @@ async def write_file(path: str, content: str) -> str:
         return f"Successfully wrote to {path}"
     except Exception as e:
         return f"Error writing file: {str(e)}"
+
+def request_user_input(question: str) -> str:
+    """Requests input from the user when more information is needed to proceed."""
+    return f"User has been asked: {question}. Waiting for response..."
