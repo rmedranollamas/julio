@@ -6,6 +6,7 @@ from google.adk.events import Event
 from google.genai import types
 import tools_internal
 from config import AgentConfig
+import functools
 from mcp_manager import MCPManager
 
 class AgentWrapper:
@@ -21,8 +22,12 @@ class AgentWrapper:
 
     def _create_agent(self) -> LlmAgent:
         # 1. Internal tools
+        @functools.wraps(tools_internal.run_shell_command)
+        async def run_shell_command(command: str) -> str:
+            return await tools_internal.run_shell_command(command, timeout=self.config.shell_command_timeout)
+
         tools = [
-            tools_internal.run_shell_command,
+            run_shell_command,
             tools_internal.list_files,
             tools_internal.read_file,
             tools_internal.write_file,
