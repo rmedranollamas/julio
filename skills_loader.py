@@ -1,16 +1,6 @@
 import os
-import threading
-from typing import List, Dict, Optional
-from watchdog.observers import Observer
-from watchdog.events import FileSystemEventHandler
-
-class SkillChangeHandler(FileSystemEventHandler):
-    def __init__(self, loader: 'SkillsLoader'):
-        self.loader = loader
-
-    def on_any_event(self, event):
-        if not event.is_directory:
-            self.loader.clear_cache(event.src_path)
+import asyncio
+from typing import List, Dict
 
 class SkillsLoader:
     def __init__(self, skills_path: str):
@@ -57,54 +47,49 @@ class SkillsLoader:
                 self.observer.join()
                 self._observer_started = False
 
-    def load_skills(self) -> str:
-        self._ensure_observer_started()
-        with self._lock:
-            if self._cache_load_skills is not None:
-                return self._cache_load_skills
+    async def load_skills(self) -> str:
+        def _get_skill_paths():
+            if not os.path.exists(self.skills_path):
+                return []
+            paths = []
+            try:
+                for item in os.listdir(self.skills_path):
+                    item_path = os.path.join(self.skills_path, item)
+                    if os.path.isdir(item_path):
+                        skill_md_path = os.path.join(item_path, "SKILL.md")
+                        if os.path.exists(skill_md_path):
+                            paths.append((item, skill_md_path))
+            except Exception:
+                pass
+            return paths
 
-        if not os.path.exists(self.skills_path):
+        skill_info = await asyncio.to_thread(_get_skill_paths)
+        if not skill_info:
             return ""
 
-        skills_content = []
-        for item in os.listdir(self.skills_path):
-            item_path = os.path.join(self.skills_path, item)
-            if os.path.isdir(item_path):
-                skill_md_path = os.path.join(item_path, "SKILL.md")
-                if os.path.exists(skill_md_path):
-                    with open(skill_md_path, "r") as f:
+        def _read_batch(batch):
+            results = []
+            for item, path in batch:
+                try:
+                    with open(path, "r") as f:
                         content = f.read()
-                        skills_content.append(f"### Skill: {item}\n{content}")
+                        results.append(f"### Skill: {item}\n{content}")
+                except Exception:
+                    pass
+            return results
+
+        # Batching to reduce thread pool overhead
+        batch_size = 100
+        batches = [skill_info[i:i + batch_size] for i in range(0, len(skill_info), batch_size)]
+
+        tasks = [asyncio.to_thread(_read_batch, batch) for batch in batches]
+        batch_results = await asyncio.gather(*tasks)
+
+        skills_content = [item for sublist in batch_results for item in sublist]
 
         if not skills_content:
             result = ""
         else:
             result = "\n\n".join(["## Available Skills", *skills_content])
 
-        with self._lock:
-            self._cache_load_skills = result
-        return result
-
-    def get_skill_resources(self, skill_name: str) -> Dict[str, str]:
-        self._ensure_observer_started()
-        with self._lock:
-            if skill_name in self._cache_resources:
-                return self._cache_resources[skill_name]
-
-        resources = {}
-        skill_path = os.path.join(self.skills_path, skill_name)
-        if os.path.isdir(skill_path):
-            for root, dirs, files in os.walk(skill_path):
-                for file in files:
-                    if file != "SKILL.md":
-                        rel_path = os.path.relpath(os.path.join(root, file), skill_path)
-                        try:
-                            with open(os.path.join(root, file), "r") as f:
-                                resources[rel_path] = f.read()
-                        except:
-                            # Skip binary or unreadable files
-                            pass
-
-        with self._lock:
-            self._cache_resources[skill_name] = resources
-        return resources
+        return "\n\n".join(["## Available Skills", *skills_content])
