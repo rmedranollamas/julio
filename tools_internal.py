@@ -33,3 +33,7 @@ def write_file(path: str, content: str) -> str:
         return f"Successfully wrote to {path}"
     except Exception as e:
         return f"Error writing file: {str(e)}"
+
+def request_user_input(question: str) -> str:
+    """Requests input from the user when more information is needed to proceed."""
+    return f"User has been asked: {question}. Waiting for response..."
