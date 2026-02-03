@@ -1,6 +1,7 @@
 from google.adk.sessions.sqlite_session_service import SqliteSessionService
 import aiosqlite
 import json
+from contextlib import asynccontextmanager
 
 class OptimizedSqliteSessionService(SqliteSessionService):
     """Subclass of SqliteSessionService that uses a shared connection to avoid overhead."""
