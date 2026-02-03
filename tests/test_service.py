@@ -26,19 +26,29 @@ async def test_agent_service():
         mock_persistence_instance.session_service = MagicMock()
         mock_persistence_instance.close = AsyncMock()
 
-        mock_agent_instance = mock_agent_wrapper.return_value
+        mock_agent_instance = AsyncMock() # Use AsyncMock for instance
         mock_agent_instance.agent = MagicMock()
+        mock_agent_instance.initialize = AsyncMock()
         mock_agent_instance.run_with_runner = AsyncMock(return_value={"resp": "ok"})
+        mock_agent_instance.process_command = AsyncMock(return_value={"resp": "ok"})
+
+        # Mock AgentWrapper.create
+        mock_agent_wrapper.create = AsyncMock(return_value=mock_agent_instance)
 
         service = AgentService()
+        # Manually initialize for the first part of the test
+        service.agent_wrapper = mock_agent_instance
+        service.runner = mock_runner.return_value
 
         # Test command handling
         await service._handle_command({"source_id": "s", "user_id": "u", "content": "c"})
 
-        mock_agent_instance.run_with_runner.assert_called()
+        mock_agent_instance.process_command.assert_called()
         mock_bus.return_value.publish_response.assert_called()
 
-        # Test start/stop (briefly)
+        # Reset service state for start() test
+        service.agent_wrapper = None
+        service.runner = None
         service.stop_event = MagicMock()
         service.stop_event.wait = AsyncMock()
 
@@ -47,6 +57,7 @@ async def test_agent_service():
 
         await service.start()
         mock_bus.return_value.subscribe_to_commands.assert_called()
+        mock_agent_wrapper.create.assert_called()
 
         await service.stop()
         mock_bus.return_value.stop.assert_called()

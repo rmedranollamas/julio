@@ -17,6 +17,7 @@ class AgentConfig(BaseModel):
     skills_path: str = "/skills"
     db_path: str = "agent.db"
     heartbeat_interval_minutes: float = 5.0
+    shell_command_timeout: float = 30.0
 
 def load_config(config_path: str = "agent.json") -> AgentConfig:
     if not os.path.exists(config_path):
