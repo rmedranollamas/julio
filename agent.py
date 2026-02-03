@@ -2,17 +2,18 @@ import json
 import os
 from typing import List, Dict, Any, Optional
 from google.adk.agents import LlmAgent
-from google.adk.tools.mcp_tool.mcp_toolset import McpToolset, StdioConnectionParams, SseConnectionParams
 from google.adk.events import Event
 from google.genai import types
 import tools_internal
 from config import AgentConfig
 import functools
+from mcp_manager import MCPManager
 
 class AgentWrapper:
-    def __init__(self, config: AgentConfig, skills_loader: Any):
+    def __init__(self, config: AgentConfig, skills_loader: Any, mcp_manager: MCPManager):
         self.config = config
         self.skills_loader = skills_loader
+        self.mcp_manager = mcp_manager
 
         # Set API key for google-genai
         os.environ["GOOGLE_API_KEY"] = self.config.gemini_api_key
@@ -29,35 +30,22 @@ class AgentWrapper:
             run_shell_command,
             tools_internal.list_files,
             tools_internal.read_file,
-            tools_internal.write_file
+            tools_internal.write_file,
+            tools_internal.request_user_input
         ]
 
-        # 2. MCP Toolsets
-        for mcp_cfg in self.config.mcp_servers:
-            if mcp_cfg.type == "stdio":
-                params = StdioConnectionParams(
-                    command=mcp_cfg.command,
-                    args=mcp_cfg.args
-                )
-            else:
-                params = SseConnectionParams(
-                    url=mcp_cfg.url
-                )
-
-            toolset = McpToolset(
-                connection_params=params,
-                tool_name_prefix=f"{mcp_cfg.name}_"
-            )
-            tools.append(toolset)
+        # 2. MCP Toolsets from Manager
+        tools.extend(self.mcp_manager.get_toolsets())
 
         # 3. Instructions from skills
         skills_prompt = self.skills_loader.load_skills()
         instruction = (
             "You are a helpful agent service running on a Linux machine.\n"
             f"{skills_prompt}\n"
-            "If you need to ask the user a question or need more information, "
-            "simply ask them in your response. End your response with [NEEDS_INPUT] "
-            "if you are waiting for user feedback before continuing a task."
+            "If you need more information from the user or need them to make a decision, "
+            "use the `request_user_input` tool. "
+            "Alternatively, if you are simply waiting for user feedback before continuing, "
+            "end your response with [NEEDS_INPUT]."
         )
 
         return LlmAgent(
@@ -74,6 +62,7 @@ class AgentWrapper:
         )
 
         assistant_text = ""
+        needs_input = False
         async for event in runner.run_async(
             user_id=user_id,
             session_id=session_id,
@@ -83,8 +72,15 @@ class AgentWrapper:
                 for part in event.content.parts:
                     if part.text:
                         assistant_text += part.text
+                    if part.function_call and part.function_call.name == "request_user_input":
+                        needs_input = True
+                        if "question" in part.function_call.args:
+                            q = part.function_call.args["question"]
+                            if q not in assistant_text:
+                                assistant_text += f"\n{q}"
 
-        needs_input = "[NEEDS_INPUT]" in assistant_text
+        if "[NEEDS_INPUT]" in assistant_text:
+            needs_input = True
 
         return {
             "source_id": session_id,
