@@ -26,12 +26,20 @@ The agent is built without heavy frameworks to maintain performance and simplici
 ## Getting Started
 
 1.  **Configure**: Edit `agent.json` with your `gemini_api_key` and Redis URL.
-2.  **Build & Run**:
+2.  **Install Dependencies**:
+    ```bash
+    uv sync
+    ```
+3.  **Run Locally**:
+    ```bash
+    uv run python main.py
+    ```
+4.  **Build & Run with Docker**:
     ```bash
     docker build -t agent-service .
     docker run agent-service
     ```
-3.  **Interact**:
+5.  **Interact**:
     Publish a JSON message to `agent_commands`:
     ```json
     {
@@ -45,9 +53,12 @@ The agent is built without heavy frameworks to maintain performance and simplici
 
 Run tests with coverage:
 ```bash
-pytest tests/
-coverage run -m pytest tests/
-coverage report -m
+uv run pytest
+uv run coverage run -m pytest
+uv run coverage report -m
 ```
 
-See `demo_service.py` for a full simulation of the agent's behavior.
+Run the demo simulation:
+```bash
+uv run python demo_service.py
+```
