@@ -1,36 +1,50 @@
 import os
 import asyncio
-from typing import List
+from typing import List, Dict
 
 class SkillsLoader:
     def __init__(self, skills_path: str):
         self.skills_path = skills_path
 
     async def load_skills(self) -> str:
-        if not await asyncio.to_thread(os.path.exists, self.skills_path):
+        def _get_skill_paths():
+            if not os.path.exists(self.skills_path):
+                return []
+            paths = []
+            try:
+                for item in os.listdir(self.skills_path):
+                    item_path = os.path.join(self.skills_path, item)
+                    if os.path.isdir(item_path):
+                        skill_md_path = os.path.join(item_path, "SKILL.md")
+                        if os.path.exists(skill_md_path):
+                            paths.append((item, skill_md_path))
+            except Exception:
+                pass
+            return paths
+
+        skill_info = await asyncio.to_thread(_get_skill_paths)
+        if not skill_info:
             return ""
 
-        items = await asyncio.to_thread(os.listdir, self.skills_path)
-
-        def _load_chunk_sync(chunk_items: List[str]) -> List[str]:
+        def _read_batch(batch):
             results = []
-            for item in chunk_items:
-                item_path = os.path.join(self.skills_path, item)
-                if os.path.isdir(item_path):
-                    skill_md_path = os.path.join(item_path, "SKILL.md")
-                    if os.path.exists(skill_md_path):
-                        with open(skill_md_path, "r") as f:
-                            content = f.read()
+            for item, path in batch:
+                try:
+                    with open(path, "r") as f:
+                        content = f.read()
                         results.append(f"### Skill: {item}\n{content}")
+                except Exception:
+                    pass
             return results
 
-        # Chunk items to reduce thread overhead while maintaining responsiveness
-        chunk_size = 100
-        chunks = [items[i:i + chunk_size] for i in range(0, len(items), chunk_size)]
+        # Batching to reduce thread pool overhead
+        batch_size = 100
+        batches = [skill_info[i:i + batch_size] for i in range(0, len(skill_info), batch_size)]
 
-        tasks = [asyncio.to_thread(_load_chunk_sync, chunk) for chunk in chunks]
-        results_chunks = await asyncio.gather(*tasks)
-        skills_content = [item for chunk in results_chunks for item in chunk]
+        tasks = [asyncio.to_thread(_read_batch, batch) for batch in batches]
+        batch_results = await asyncio.gather(*tasks)
+
+        skills_content = [item for sublist in batch_results for item in sublist]
 
         if not skills_content:
             return ""

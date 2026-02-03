@@ -2,15 +2,17 @@ import pytest
 import asyncio
 from unittest.mock import AsyncMock, patch, MagicMock
 from agent import AgentWrapper, AgentConfig
+from mcp_manager import MCPManager
 
 @pytest.mark.asyncio
 async def test_agent_wrapper():
     config = AgentConfig(gemini_api_key="key", mcp_servers=[])
     skills_loader = MagicMock()
-    skills_loader.load_skills = AsyncMock(return_value="Skills")
+    skills_loader.load_skills.return_value = "Skills"
+    mcp_manager = MagicMock()
+    mcp_manager.get_toolsets.return_value = []
 
-    wrapper = AgentWrapper(config, skills_loader)
-    await wrapper.initialize()
+    wrapper = AgentWrapper(config, skills_loader, mcp_manager)
     assert wrapper.agent.name == "agent_service"
     assert "Skills" in wrapper.agent.instruction
 
@@ -18,9 +20,9 @@ async def test_agent_wrapper():
 async def test_agent_run():
     config = AgentConfig(gemini_api_key="key")
     skills_loader = MagicMock()
-    skills_loader.load_skills = AsyncMock(return_value="Skills")
-    wrapper = AgentWrapper(config, skills_loader)
-    await wrapper.initialize()
+    mcp_manager = MagicMock()
+    mcp_manager.get_toolsets.return_value = []
+    wrapper = AgentWrapper(config, skills_loader, mcp_manager)
 
     mock_runner = MagicMock()
     from google.adk.events import Event
