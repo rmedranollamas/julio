@@ -3,7 +3,7 @@ import os
 import json
 import asyncio
 import fakeredis.aioredis as fakeredis
-from persistence import PersistenceWrapper
+from persistence import Persistence
 from config import load_config, AgentConfig
 from bus import MessageBus
 from tools_internal import run_shell_command, list_files, read_file, write_file
@@ -13,7 +13,7 @@ from skills_loader import SkillsLoader
 @pytest.mark.asyncio
 async def test_persistence(tmp_path):
     db_path = str(tmp_path / "test.db")
-    p = PersistenceWrapper(db_path)
+    p = Persistence(db_path)
     # Testing SqliteSessionService via ADK is better done in integrated tests,
     # but let's just check it initializes.
     assert p.session_service is not None
