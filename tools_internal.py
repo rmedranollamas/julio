@@ -1,7 +1,8 @@
 import asyncio
 import os
+import subprocess
 
-async def run_shell_command(command: str, timeout: float = 30.0) -> str:
+async def run_shell_command(command: str) -> str:
     """Executes a shell command and returns the output."""
     try:
         process = await asyncio.create_subprocess_shell(
@@ -9,6 +10,10 @@ async def run_shell_command(command: str, timeout: float = 30.0) -> str:
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE
         )
+        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=30)
+        return f"STDOUT:\n{stdout.decode()}\nSTDERR:\n{stderr.decode()}"
+    except asyncio.TimeoutError:
+        return "Error: Command timed out"
         try:
             stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout)
             return f"STDOUT:\n{stdout.decode()}\nSTDERR:\n{stderr.decode()}"

@@ -1,41 +1,52 @@
 import os
+import asyncio
 from typing import List, Dict
 
 class SkillsLoader:
     def __init__(self, skills_path: str):
         self.skills_path = skills_path
 
-    def load_skills(self) -> str:
-        if not os.path.exists(self.skills_path):
+    async def load_skills(self) -> str:
+        def _get_skill_paths():
+            if not os.path.exists(self.skills_path):
+                return []
+            paths = []
+            try:
+                for item in os.listdir(self.skills_path):
+                    item_path = os.path.join(self.skills_path, item)
+                    if os.path.isdir(item_path):
+                        skill_md_path = os.path.join(item_path, "SKILL.md")
+                        if os.path.exists(skill_md_path):
+                            paths.append((item, skill_md_path))
+            except Exception:
+                pass
+            return paths
+
+        skill_info = await asyncio.to_thread(_get_skill_paths)
+        if not skill_info:
             return ""
 
-        skills_content = []
-        for item in os.listdir(self.skills_path):
-            item_path = os.path.join(self.skills_path, item)
-            if os.path.isdir(item_path):
-                skill_md_path = os.path.join(item_path, "SKILL.md")
-                if os.path.exists(skill_md_path):
-                    with open(skill_md_path, "r") as f:
+        def _read_batch(batch):
+            results = []
+            for item, path in batch:
+                try:
+                    with open(path, "r") as f:
                         content = f.read()
-                        skills_content.append(f"### Skill: {item}\n{content}")
+                        results.append(f"### Skill: {item}\n{content}")
+                except Exception:
+                    pass
+            return results
+
+        # Batching to reduce thread pool overhead
+        batch_size = 100
+        batches = [skill_info[i:i + batch_size] for i in range(0, len(skill_info), batch_size)]
+
+        tasks = [asyncio.to_thread(_read_batch, batch) for batch in batches]
+        batch_results = await asyncio.gather(*tasks)
+
+        skills_content = [item for sublist in batch_results for item in sublist]
 
         if not skills_content:
             return ""
 
         return "\n\n".join(["## Available Skills", *skills_content])
-
-    def get_skill_resources(self, skill_name: str) -> Dict[str, str]:
-        resources = {}
-        skill_path = os.path.join(self.skills_path, skill_name)
-        if os.path.isdir(skill_path):
-            for root, dirs, files in os.walk(skill_path):
-                for file in files:
-                    if file != "SKILL.md":
-                        rel_path = os.path.relpath(os.path.join(root, file), skill_path)
-                        try:
-                            with open(os.path.join(root, file), "r") as f:
-                                resources[rel_path] = f.read()
-                        except:
-                            # Skip binary or unreadable files
-                            pass
-        return resources

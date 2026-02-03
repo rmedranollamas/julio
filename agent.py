@@ -17,10 +17,15 @@ class AgentWrapper:
 
         # Set API key for google-genai
         os.environ["GOOGLE_API_KEY"] = self.config.gemini_api_key
+        self.agent = None
 
-        self.agent = self._create_agent()
+    @classmethod
+    async def create(cls, config: AgentConfig, skills_loader: Any):
+        instance = cls(config, skills_loader)
+        instance.agent = await instance._create_agent()
+        return instance
 
-    def _create_agent(self) -> LlmAgent:
+    async def _create_agent(self) -> LlmAgent:
         # 1. Internal tools
         @functools.wraps(tools_internal.run_shell_command)
         async def run_shell_command(command: str) -> str:
@@ -38,7 +43,7 @@ class AgentWrapper:
         tools.extend(self.mcp_manager.get_toolsets())
 
         # 3. Instructions from skills
-        skills_prompt = self.skills_loader.load_skills()
+        skills_prompt = await self.skills_loader.load_skills()
         instruction = (
             "You are a helpful agent service running on a Linux machine.\n"
             f"{skills_prompt}\n"
