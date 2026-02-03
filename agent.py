@@ -13,11 +13,15 @@ class AgentWrapper:
     def __init__(self, config: AgentConfig, skills_loader: Any, mcp_manager: MCPManager):
         self.config = config
         self.skills_loader = skills_loader
+        self.agent = None
         self.mcp_manager = mcp_manager
 
         # Set API key for google-genai
         os.environ["GOOGLE_API_KEY"] = self.config.gemini_api_key
         self.agent = None
+
+    async def initialize(self):
+        self.agent = await self._create_agent()
 
     @classmethod
     async def create(cls, config: AgentConfig, skills_loader: Any):

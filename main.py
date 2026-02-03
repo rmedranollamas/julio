@@ -17,6 +17,7 @@ class AgentService:
         self.persistence = PersistenceWrapper(self.config.db_path)
         self.bus = MessageBus(self.config.redis_url)
         self.skills_loader = SkillsLoader(self.config.skills_path)
+        self.agent_wrapper = AgentWrapper(self.config, self.skills_loader)
         self.agent_wrapper = None
         self.runner = None
         self.stop_event = asyncio.Event()
@@ -24,6 +25,8 @@ class AgentService:
     async def start(self):
         print("Starting ADK Agent Service...")
 
+        # Initialize AgentWrapper
+        await self.agent_wrapper.initialize()
         # Async initialization
         self.agent_wrapper = await AgentWrapper.create(self.config, self.skills_loader)
         self.mcp_manager = MCPManager(self.config.mcp_servers)
@@ -97,8 +100,6 @@ class AgentService:
         await self.bus.stop()
         if self.runner:
             await self.runner.close()
-        await self.mcp_manager.stop()
-        await self.runner.close()
         await self.mcp_manager.stop()
 
 async def main():

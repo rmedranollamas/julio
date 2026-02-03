@@ -27,6 +27,7 @@ async def test_agent_service():
 
         mock_agent_instance = AsyncMock() # Use AsyncMock for instance
         mock_agent_instance.agent = MagicMock()
+        mock_agent_instance.initialize = AsyncMock()
         mock_agent_instance.run_with_runner = AsyncMock(return_value={"resp": "ok"})
 
         # Mock AgentWrapper.create
