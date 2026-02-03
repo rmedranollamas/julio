@@ -12,3 +12,4 @@ sqlalchemy
 pytest
 pytest-asyncio
 coverage
+watchdog
