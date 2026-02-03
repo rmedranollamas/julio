@@ -71,8 +71,8 @@ class AgentService:
 
         response = await self.agent_wrapper.run_with_runner(
             self.runner,
+            source_id=source_id,
             user_id=user_id,
-            session_id=source_id,
             content=content
         )
 
