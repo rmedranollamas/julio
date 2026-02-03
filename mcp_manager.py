@@ -1,116 +1,106 @@
 import asyncio
 import logging
-from typing import List, Optional, Dict, Any, Union, TextIO
-import sys
-
+from typing import List, Dict, Optional, Tuple
 from mcp import StdioServerParameters
-from google.adk.tools.base_toolset import BaseToolset, ToolPredicate
-from google.adk.tools.mcp_tool.mcp_toolset import McpToolset, StdioConnectionParams, SseConnectionParams
-from google.adk.agents.readonly_context import ReadonlyContext
-from google.adk.tools.base_tool import BaseTool
+from google.adk.tools.mcp_tool.mcp_toolset import (
+    McpToolset,
+    StdioConnectionParams,
+    SseConnectionParams
+)
+from config import MCPServerConfig
 
 logger = logging.getLogger(__name__)
 
-class MCPManager(BaseToolset):
-    """Manages multiple MCP toolsets and parallelizes tool discovery."""
+class MCPManager:
+    """
+    Manages dedicated tasks for MCP services to keep their contexts open.
+    """
+    def __init__(self, mcp_configs: List[MCPServerConfig]):
+        self.configs = mcp_configs
+        self.managed_servers: List[Tuple[McpToolset, str]] = []
+        self._tasks: List[asyncio.Task] = []
+        self._stop_event = asyncio.Event()
 
-    def __init__(
-        self,
-        server_configs: List[Any],
-        tool_filter: Optional[Union[ToolPredicate, List[str]]] = None,
-        errlog: TextIO = sys.stderr,
-    ):
-        super().__init__(tool_filter=tool_filter)
-        self.toolsets: Dict[str, McpToolset] = {}
+        # Initialize toolsets
+        for config in self.configs:
+            try:
+                if config.type == "stdio":
+                    if not config.command:
+                        logger.warning(f"MCP server {config.name} is type 'stdio' but missing command. Skipping.")
+                        continue
 
-        for mcp_cfg in server_configs:
-            params = None
-            if mcp_cfg.type == "stdio":
-                # To be robust across different ADK versions, we try to support both formats.
-                # The newer format expects server_params as a StdioServerParameters object.
-                try:
+                    # Note: Original code used (command=..., args=...) but library
+                    # source shows it requires server_params: StdioServerParameters.
                     params = StdioConnectionParams(
                         server_params=StdioServerParameters(
-                            command=mcp_cfg.command,
-                            args=mcp_cfg.args
+                            command=config.command,
+                            args=config.args
                         )
                     )
-                except Exception:
-                    # Fallback to older format or direct assignment if the above fails
-                    try:
-                        params = StdioConnectionParams(
-                            command=mcp_cfg.command,
-                            args=mcp_cfg.args
-                        )
-                    except Exception as e:
-                        logger.error(f"Failed to initialize StdioConnectionParams for {mcp_cfg.name}: {e}")
+                elif config.type == "sse":
+                    if not config.url:
+                        logger.warning(f"MCP server {config.name} is type 'sse' but missing url. Skipping.")
                         continue
-            else:
-                params = SseConnectionParams(
-                    url=mcp_cfg.url
-                )
+                    params = SseConnectionParams(url=config.url)
+                else:
+                    logger.warning(f"Unknown MCP server type '{config.type}' for {config.name}. Skipping.")
+                    continue
 
-            if params:
                 toolset = McpToolset(
                     connection_params=params,
-                    tool_name_prefix=f"{mcp_cfg.name}_",
-                    errlog=errlog
+                    tool_name_prefix=f"{config.name}_"
                 )
-                self.toolsets[mcp_cfg.name] = toolset
+                self.managed_servers.append((toolset, config.name))
+            except Exception as e:
+                logger.error(f"Failed to initialize toolset for {config.name}: {e}")
 
-    async def get_tools(
-        self,
-        readonly_context: Optional[ReadonlyContext] = None,
-    ) -> List[BaseTool]:
-        """Return all tools from all managed MCP servers in parallel."""
-        if not self.toolsets:
-            return []
+    async def start(self):
+        """Starts dedicated tasks for each MCP service."""
+        for toolset, name in self.managed_servers:
+            task = asyncio.create_task(self._keep_alive(toolset, name))
+            self._tasks.append(task)
+        logger.info(f"Started {len(self._tasks)} MCP keep-alive tasks.")
 
-        tasks = [ts.get_tools(readonly_context) for ts in self.toolsets.values()]
-        results = await asyncio.gather(*tasks)
+    async def _keep_alive(self, toolset: McpToolset, name: str):
+        """Dedicated task to keep the MCP session open."""
+        logger.info(f"Starting dedicated keep-alive task for MCP server: {name}")
+        while not self._stop_event.is_set():
+            try:
+                # Use public get_tools() to ensure connection is established and alive.
+                # This avoids relying on private attributes of McpToolset.
+                await toolset.get_tools()
 
-        all_tools = []
-        for tools in results:
-            all_tools.extend(tools)
-        return all_tools
-
-    async def list_tools(self) -> List[Dict[str, Any]]:
-        """
-        Parallelizes tool discovery and returns tool definitions as dictionaries.
-        This matches the signature and intent of the original requested optimization.
-        """
-        if not self.toolsets:
-            return []
-
-        async def get_tool_dicts_from_ts(ts):
-            tools = await ts.get_tools()
-            tool_dicts = []
-            for tool in tools:
-                # Use the public/documented way to get tool declarations if possible
-                # or fallback to model_dump if it's a pydantic-like object.
+                # Wait for next check or stop event
                 try:
-                    decl = tool._get_declaration()
-                    if hasattr(decl, "model_dump"):
-                        d = decl.model_dump()
-                    else:
-                        d = dict(decl)
-                    tool_dicts.append(d)
-                except Exception as e:
-                    logger.warning(f"Could not get declaration for tool {tool.name}: {e}")
-            return tool_dicts
+                    await asyncio.wait_for(self._stop_event.wait(), timeout=30)
+                    break # Stop event set
+                except asyncio.TimeoutError:
+                    pass # Continue loop
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                if self._stop_event.is_set():
+                    break
+                logger.error(f"Error in MCP keep-alive for {name}: {e}. Retrying in 5s...")
+                try:
+                    await asyncio.wait_for(self._stop_event.wait(), timeout=5)
+                except asyncio.TimeoutError:
+                    pass
+                except asyncio.CancelledError:
+                    break
 
-        tasks = [get_tool_dicts_from_ts(ts) for ts in self.toolsets.values()]
-        results = await asyncio.gather(*tasks)
+    def get_toolsets(self) -> List[McpToolset]:
+        """Returns the list of managed toolsets."""
+        return [toolset for toolset, _ in self.managed_servers]
 
-        all_tools = []
-        for result in results:
-            all_tools.extend(result)
-        return all_tools
+    async def stop(self):
+        """Stops all dedicated tasks and closes toolsets."""
+        self._stop_event.set()
+        for task in self._tasks:
+            task.cancel()
+        if self._tasks:
+            await asyncio.gather(*self._tasks, return_exceptions=True)
 
-    async def close(self) -> None:
-        """Close all managed toolsets in parallel."""
-        if not self.toolsets:
-            return
-
-        tasks = [ts.close() for ts in self.toolsets.values()]
-        await asyncio.gather(*tasks, return_exceptions=True)
+        for toolset, _ in self.managed_servers:
+            await toolset.close()
+        logger.info("Stopped all MCP keep-alive tasks and closed sessions.")

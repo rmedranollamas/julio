@@ -3,9 +3,10 @@ import signal
 import os
 from config import load_config
 from bus import MessageBus
-from persistence import PersistenceWrapper
+from persistence import Persistence
 from skills_loader import SkillsLoader
 from agent import AgentWrapper
+from mcp_manager import MCPManager
 from google.adk.runners import Runner
 from google.adk.memory.in_memory_memory_service import InMemoryMemoryService
 from google.adk.artifacts.in_memory_artifact_service import InMemoryArtifactService
@@ -13,10 +14,23 @@ from google.adk.artifacts.in_memory_artifact_service import InMemoryArtifactServ
 class AgentService:
     def __init__(self, config_path: str = "agent.json"):
         self.config = load_config(config_path)
-        self.persistence = PersistenceWrapper(self.config.db_path)
+        self.persistence = Persistence(self.config.db_path)
         self.bus = MessageBus(self.config.redis_url)
         self.skills_loader = SkillsLoader(self.config.skills_path)
         self.agent_wrapper = AgentWrapper(self.config, self.skills_loader)
+        self.agent_wrapper = None
+        self.runner = None
+        self.stop_event = asyncio.Event()
+
+    async def start(self):
+        print("Starting ADK Agent Service...")
+
+        # Initialize AgentWrapper
+        await self.agent_wrapper.initialize()
+        # Async initialization
+        self.agent_wrapper = await AgentWrapper.create(self.config, self.skills_loader)
+        self.mcp_manager = MCPManager(self.config.mcp_servers)
+        self.agent_wrapper = AgentWrapper(self.config, self.skills_loader, self.mcp_manager)
 
         # Create ADK Runner
         self.runner = Runner(
@@ -31,6 +45,9 @@ class AgentService:
 
     async def start(self):
         print("Starting ADK Agent Service...")
+
+        # Start MCP Manager
+        await self.mcp_manager.start()
 
         # Subscribe to commands
         await self.bus.subscribe_to_commands("agent_commands", self._handle_command)
@@ -48,10 +65,14 @@ class AgentService:
 
         print(f"Received command from {source_id}/{user_id}: {content}")
 
+        if not self.agent_wrapper or not self.runner:
+            print("Error: Agent not initialized")
+            return
+
         response = await self.agent_wrapper.run_with_runner(
             self.runner,
+            source_id=source_id,
             user_id=user_id,
-            session_id=source_id,
             content=content
         )
 
@@ -77,7 +98,9 @@ class AgentService:
         print("Stopping Agent Service...")
         self.stop_event.set()
         await self.bus.stop()
-        await self.runner.close()
+        if self.runner:
+            await self.runner.close()
+        await self.mcp_manager.stop()
 
 async def main():
     service = AgentService()

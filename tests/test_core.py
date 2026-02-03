@@ -3,7 +3,7 @@ import os
 import json
 import asyncio
 import fakeredis.aioredis as fakeredis
-from persistence import PersistenceWrapper
+from persistence import Persistence
 from config import load_config, AgentConfig
 from bus import MessageBus
 from tools_internal import run_shell_command, list_files, read_file, write_file
@@ -13,7 +13,7 @@ from skills_loader import SkillsLoader
 @pytest.mark.asyncio
 async def test_persistence(tmp_path):
     db_path = str(tmp_path / "test.db")
-    p = PersistenceWrapper(db_path)
+    p = Persistence(db_path)
     # Testing SqliteSessionService via ADK is better done in integrated tests,
     # but let's just check it initializes.
     assert p.session_service is not None
@@ -51,9 +51,10 @@ async def test_bus():
     await bus.stop()
 
 # Internal Tools Tests
-def test_tools_internal(tmp_path):
+@pytest.mark.asyncio
+async def test_tools_internal(tmp_path):
     test_file = tmp_path / "test.txt"
-    assert "Successfully wrote" in write_file(str(test_file), "hello")
-    assert read_file(str(test_file)) == "hello"
-    assert str(test_file.name) in list_files(str(tmp_path))
-    assert "STDOUT:\nechoed\n" in run_shell_command("echo echoed")
+    assert "Successfully wrote" in await write_file(str(test_file), "hello")
+    assert await read_file(str(test_file)) == "hello"
+    assert str(test_file.name) in await list_files(str(tmp_path))
+    assert "STDOUT:\nechoed\n" in await run_shell_command("echo echoed")

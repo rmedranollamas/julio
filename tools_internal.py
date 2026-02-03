@@ -1,35 +1,58 @@
-import subprocess
+import asyncio
 import os
+import subprocess
 
-def run_shell_command(command: str) -> str:
+async def run_shell_command(command: str) -> str:
     """Executes a shell command and returns the output."""
     try:
-        result = subprocess.run(command, shell=True, capture_output=True, text=True, timeout=30)
-        return f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        process = await asyncio.create_subprocess_shell(
+            command,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=30)
+        return f"STDOUT:\n{stdout.decode()}\nSTDERR:\n{stderr.decode()}"
+    except asyncio.TimeoutError:
+        return "Error: Command timed out"
+        try:
+            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout)
+            return f"STDOUT:\n{stdout.decode()}\nSTDERR:\n{stderr.decode()}"
+        except asyncio.TimeoutError:
+            process.kill()
+            await process.wait()
+            return f"Error: Command timed out after {timeout} seconds"
     except Exception as e:
         return f"Error executing command: {str(e)}"
 
-def list_files(path: str = ".") -> str:
+async def list_files(path: str = ".") -> str:
     """Lists files in the specified directory."""
     try:
-        files = os.listdir(path)
+        files = await asyncio.to_thread(os.listdir, path)
         return "\n".join(files)
     except Exception as e:
         return f"Error listing files: {str(e)}"
 
-def read_file(path: str) -> str:
+async def read_file(path: str) -> str:
     """Reads the content of a file."""
     try:
-        with open(path, "r") as f:
-            return f.read()
+        def _read():
+            with open(path, "r") as f:
+                return f.read()
+        return await asyncio.to_thread(_read)
     except Exception as e:
         return f"Error reading file: {str(e)}"
 
-def write_file(path: str, content: str) -> str:
+async def write_file(path: str, content: str) -> str:
     """Writes content to a file."""
     try:
-        with open(path, "w") as f:
-            f.write(content)
+        def _write():
+            with open(path, "w") as f:
+                f.write(content)
+        await asyncio.to_thread(_write)
         return f"Successfully wrote to {path}"
     except Exception as e:
         return f"Error writing file: {str(e)}"
+
+def request_user_input(question: str) -> str:
+    """Requests input from the user when more information is needed to proceed."""
+    return f"User has been asked: {question}. Waiting for response..."
