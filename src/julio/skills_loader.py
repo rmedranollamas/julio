@@ -1,16 +1,18 @@
 import os
 import asyncio
 import threading
-from typing import List, Dict, Optional
+from typing import Dict, Optional
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
+
 class SkillChangeHandler(FileSystemEventHandler):
-    def __init__(self, loader: 'SkillsLoader'):
+    def __init__(self, loader: "SkillsLoader"):
         self.loader = loader
 
     def on_any_event(self, event):
         self.loader.clear_cache(event.src_path)
+
 
 class SkillsLoader:
     def __init__(self, skills_path: str):
@@ -28,7 +30,9 @@ class SkillsLoader:
         with self._lock:
             if not self._observer_started and os.path.exists(self.skills_path):
                 try:
-                    self.observer.schedule(self.event_handler, self.skills_path, recursive=True)
+                    self.observer.schedule(
+                        self.event_handler, self.skills_path, recursive=True
+                    )
                     self.observer.start()
                     self._observer_started = True
                 except Exception:
@@ -90,7 +94,10 @@ class SkillsLoader:
 
         # Batching to reduce thread pool overhead
         batch_size = 100
-        batches = [skill_info[i:i + batch_size] for i in range(0, len(skill_info), batch_size)]
+        batches = [
+            skill_info[i : i + batch_size]
+            for i in range(0, len(skill_info), batch_size)
+        ]
 
         tasks = [asyncio.to_thread(_read_batch, batch) for batch in batches]
         batch_results = await asyncio.gather(*tasks)
@@ -98,8 +105,8 @@ class SkillsLoader:
         skills_content = [item for sublist in batch_results for item in sublist]
 
         if not skills_content:
-            result = ""
+            pass
         else:
-            result = "\n\n".join(["## Available Skills", *skills_content])
+            "\n\n".join(["## Available Skills", *skills_content])
 
         return "\n\n".join(["## Available Skills", *skills_content])

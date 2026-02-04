@@ -3,9 +3,11 @@ import aiosqlite
 import json
 from contextlib import asynccontextmanager
 
+
 class OptimizedSqliteSessionService(SqliteSessionService):
     """Subclass of SqliteSessionService that uses a shared connection to avoid overhead."""
-    def __init__(self, db_path: str, persistence: 'Persistence'):
+
+    def __init__(self, db_path: str, persistence: "Persistence"):
         super().__init__(db_path=db_path)
         self.persistence = persistence
 
@@ -15,8 +17,10 @@ class OptimizedSqliteSessionService(SqliteSessionService):
         # We don't run CREATE_SCHEMA_SQL here because it's already done once in Persistence.get_connection
         yield db
 
+
 class Persistence:
     """Wrapper for ADK SqliteSessionService to maintain consistency in AgentService."""
+
     def __init__(self, db_path: str):
         self.db_path = db_path
         # SqliteSessionService handles its own schema initialization on connect.

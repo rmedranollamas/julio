@@ -9,7 +9,7 @@ async def test_agent_service():
         patch("julio.main.load_config") as mock_load_config,
         patch("julio.main.Persistence") as mock_persistence,
         patch("julio.main.MessageBus", return_value=AsyncMock()) as mock_bus,
-        patch("julio.main.SkillsLoader") as mock_skills,
+        patch("julio.main.SkillsLoader"),
         patch("julio.main.AgentWrapper") as mock_agent_wrapper,
         patch("julio.main.Runner", return_value=AsyncMock()) as mock_runner,
     ):
