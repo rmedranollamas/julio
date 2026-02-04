@@ -2,10 +2,10 @@ import os
 from typing import List, Dict, Any
 from google.adk.agents import LlmAgent
 from google.genai import types
-import tools_internal
-from config import AgentConfig
+from . import tools_internal
+from .config import AgentConfig
 import functools
-from mcp_manager import MCPManager
+from .mcp_manager import MCPManager
 
 
 class AgentWrapper:

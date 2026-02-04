@@ -1,11 +1,11 @@
 import asyncio
 import signal
-from config import load_config
-from bus import MessageBus
-from persistence import Persistence
-from skills_loader import SkillsLoader
-from agent import AgentWrapper
-from mcp_manager import MCPManager
+from .config import load_config
+from .bus import MessageBus
+from .persistence import Persistence
+from .skills_loader import SkillsLoader
+from .agent import AgentWrapper
+from .mcp_manager import MCPManager
 from google.adk.runners import Runner
 from google.adk.memory.in_memory_memory_service import InMemoryMemoryService
 from google.adk.artifacts.in_memory_artifact_service import InMemoryArtifactService
@@ -15,7 +15,7 @@ class AgentService:
     def __init__(self, config_path: str = "agent.json"):
         self.config = load_config(config_path)
         self.persistence = Persistence(self.config.db_path)
-        self.bus = MessageBus(self.config.redis_url)
+        self.bus = MessageBus()
         self.skills_loader = SkillsLoader(self.config.skills_path)
         self.mcp_manager = MCPManager(self.config.mcp_servers)
         self.agent_wrapper = None
@@ -100,7 +100,7 @@ class AgentService:
         await self.persistence.close()
 
 
-async def main():
+async def run_service():
     service = AgentService()
 
     # Handle signals
@@ -114,5 +114,9 @@ async def main():
         print(f"Service error: {e}")
 
 
+def main():
+    asyncio.run(run_service())
+
+
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()

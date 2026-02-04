@@ -13,21 +13,22 @@ dependencies = [
     "pydantic>=2.12.5",
     "pydantic-settings>=2.12.0",
     "python-dotenv>=1.2.1",
-    "redis>=7.1.0",
     "sqlalchemy>=2.0.46",
     "watchdog>=6.0.0",
 ]
 
 [tool.uv]
-package = false
+package = true
+
+[project.scripts]
+julio-agent = "julio.main:main"
 
 [dependency-groups]
 dev = [
     "coverage>=7.13.3",
-    "fakeredis>=2.33.0",
     "pytest>=9.0.2",
     "pytest-asyncio>=1.3.0",
 ]
 
 [tool.pytest.ini_options]
-pythonpath = ["."]
+pythonpath = ["src"]

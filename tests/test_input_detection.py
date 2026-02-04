@@ -1,6 +1,7 @@
 import pytest
 from unittest.mock import MagicMock, AsyncMock
-from agent import AgentWrapper, AgentConfig
+from julio.agent import AgentWrapper
+from julio.config import AgentConfig
 from google.adk.events import Event
 from google.genai import types
 

@@ -7,7 +7,7 @@ from google.adk.tools.mcp_tool.mcp_toolset import (
     StdioConnectionParams,
     SseConnectionParams,
 )
-from config import MCPServerConfig
+from .config import MCPServerConfig
 
 logger = logging.getLogger(__name__)
 

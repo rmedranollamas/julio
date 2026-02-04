@@ -1,8 +1,6 @@
 import pytest
-import os
-import shutil
-import asyncio
-from skills_loader import SkillsLoader
+from julio.skills_loader import SkillsLoader
+
 
 @pytest.mark.asyncio
 async def test_load_skills(tmp_path):
@@ -30,6 +28,7 @@ async def test_load_skills(tmp_path):
     assert "Skill 2 content" in content
     assert "not_a_skill" not in content
 
+
 @pytest.mark.asyncio
 async def test_load_skills_empty(tmp_path):
     skills_dir = tmp_path / "empty_skills"
@@ -38,6 +37,7 @@ async def test_load_skills_empty(tmp_path):
     loader = SkillsLoader(str(skills_dir))
     content = await loader.load_skills()
     assert content == ""
+
 
 @pytest.mark.asyncio
 async def test_load_skills_nonexistent():
