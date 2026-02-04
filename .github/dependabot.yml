@@ -1,6 +1,6 @@
 version: 2
 updates:
-  - package-ecosystem: "pip" # Dependabot uses the pip ecosystem to support uv.lock
+  - package-ecosystem: "uv"
     directory: "/"
     schedule:
       interval: "weekly"
