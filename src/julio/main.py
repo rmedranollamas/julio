@@ -1,5 +1,6 @@
 import asyncio
 import signal
+from dotenv import load_dotenv
 from .config import load_config
 from .bus import MessageBus
 from .persistence import Persistence
@@ -115,6 +116,7 @@ async def run_service():
 
 
 def main():
+    load_dotenv()
     asyncio.run(run_service())
 
 

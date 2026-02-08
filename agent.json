@@ -1,5 +1,4 @@
 {
-  "gemini_api_key": "TODO_REPLACE_ME",
   "mcp_servers": [],
   "skills_path": "./skills",
   "db_path": "agent_state.db",
