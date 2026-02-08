@@ -85,32 +85,6 @@ class AgentWrapper:
     async def process_command(
         self, runner: Any, source_id: str, user_id: str, content: str
     ) -> Dict[str, Any]:
-        # 1. Get history (Asynchronous Call)
-        history = []
-        if self.persistence:
-            history = await self.persistence.get_history(source_id, user_id)
-
-        # 2. Load skills context (Asynchronous Call)
-        skills_context = await self.skills_loader.load_skills()
-
-        # Log for internal use (e.g. debugging or future expansion)
-        print(
-            f"Loaded {len(history)} history events and {len(skills_context)} chars of skills context"
-        )
-
-        return await self.run_with_runner(
-            runner, user_id, source_id, content, history, skills_context
-        )
-
-    async def run_with_runner(
-        self,
-        runner: Any,
-        user_id: str,
-        source_id: str,
-        content: str,
-        history: List[Any] = None,
-        skills_context: str = None,
-    ) -> Dict[str, Any]:
         new_message = types.Content(role="user", parts=[types.Part(text=content)])
 
         assistant_text = ""
