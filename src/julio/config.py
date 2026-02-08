@@ -2,6 +2,7 @@ import json
 import os
 from typing import List, Optional, Literal
 from pydantic import BaseModel, Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class MCPServerConfig(BaseModel):
@@ -12,20 +13,21 @@ class MCPServerConfig(BaseModel):
     url: Optional[str] = None
 
 
-class AgentConfig(BaseModel):
+class AgentConfig(BaseSettings):
     gemini_api_key: str
     mcp_servers: List[MCPServerConfig] = Field(default_factory=list)
-    skills_path: str = "/skills"
+    skills_path: str = "./skills"
     db_path: str = "agent.db"
     heartbeat_interval_minutes: float = 5.0
     shell_command_timeout: float = 30.0
 
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
 
 def load_config(config_path: str = "agent.json") -> AgentConfig:
-    if not os.path.exists(config_path):
-        raise FileNotFoundError(f"Config file not found: {config_path}")
-
-    with open(config_path, "r") as f:
-        data = json.load(f)
+    data = {}
+    if os.path.exists(config_path):
+        with open(config_path, "r") as f:
+            data = json.load(f)
 
     return AgentConfig(**data)
