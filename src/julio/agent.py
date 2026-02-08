@@ -85,15 +85,6 @@ class AgentWrapper:
     async def process_command(
         self, runner: Any, source_id: str, user_id: str, content: str
     ) -> Dict[str, Any]:
-        return await self.run_with_runner(runner, user_id, source_id, content)
-
-    async def run_with_runner(
-        self,
-        runner: Any,
-        user_id: str,
-        source_id: str,
-        content: str,
-    ) -> Dict[str, Any]:
         new_message = types.Content(role="user", parts=[types.Part(text=content)])
 
         assistant_text = ""
