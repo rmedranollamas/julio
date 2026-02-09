@@ -24,7 +24,7 @@ async def test_mcp_manager_list_tools():
     mock_tool._get_declaration.return_value = mock_decl
 
     mock_toolset = MagicMock()
-    mock_toolset.get_tools = AsyncMock(return_value=[mock_tool])
+    mock_toolset.get_tools_with_prefix = AsyncMock(return_value=[mock_tool])
 
     with patch("julio.mcp_manager.McpToolset", return_value=mock_toolset):
         manager = MCPManager([mock_cfg])
@@ -32,7 +32,7 @@ async def test_mcp_manager_list_tools():
 
         assert len(tools) == 1
         assert tools[0]["name"] == "test_server_tool1"
-        mock_toolset.get_tools.assert_called()
+        mock_toolset.get_tools_with_prefix.assert_called()
 
 
 @pytest.mark.asyncio
@@ -56,11 +56,11 @@ async def test_mcp_manager_parallel_get_tools():
         return ["t2"]
 
     mock_toolset1 = MagicMock()
-    mock_toolset1.get_tools = AsyncMock(side_effect=s1)
+    mock_toolset1.get_tools_with_prefix = AsyncMock(side_effect=s1)
     mock_toolset1.close = AsyncMock()
 
     mock_toolset2 = MagicMock()
-    mock_toolset2.get_tools = AsyncMock(side_effect=s2)
+    mock_toolset2.get_tools_with_prefix = AsyncMock(side_effect=s2)
     mock_toolset2.close = AsyncMock()
 
     with patch("julio.mcp_manager.McpToolset") as mock_ts_cls:

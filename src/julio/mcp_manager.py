@@ -57,7 +57,7 @@ class MCPManager:
                     continue
 
                 toolset = McpToolset(
-                    connection_params=params, tool_name_prefix=f"{config.name}_"
+                    connection_params=params, tool_name_prefix=config.name
                 )
                 self.managed_servers.append((toolset, config.name))
             except Exception as e:
@@ -125,7 +125,7 @@ class MCPManager:
     async def _fetch_and_cache(self, toolset: McpToolset, name: str):
         """Fetches tools from a server, processes them, and updates the cache."""
         try:
-            tools = await toolset.get_tools()
+            tools = await toolset.get_tools_with_prefix()
             processed = self._process_tools(tools, name)
             async with self._cache_lock:
                 self._cache[name] = processed
