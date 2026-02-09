@@ -71,12 +71,12 @@ class SkillsLoader:
                 return []
             paths = []
             try:
-                for item in os.listdir(self.skills_path):
-                    item_path = os.path.join(self.skills_path, item)
-                    if os.path.isdir(item_path):
-                        skill_md_path = os.path.join(item_path, "SKILL.md")
-                        if os.path.exists(skill_md_path):
-                            paths.append((item, skill_md_path))
+                with os.scandir(self.skills_path) as it:
+                    for entry in it:
+                        if entry.is_dir():
+                            skill_md_path = os.path.join(entry.path, "SKILL.md")
+                            if os.path.exists(skill_md_path):
+                                paths.append((entry.name, skill_md_path))
             except Exception:
                 pass
             return paths
