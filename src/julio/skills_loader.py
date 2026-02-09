@@ -20,7 +20,7 @@ class SkillsLoader:
         self._cache_load_skills: Optional[str] = None
         self._cache_resources: Dict[str, Dict[str, str]] = {}
         self._lock = threading.Lock()
-        self._async_lock: Optional[asyncio.Lock] = None
+        self._async_lock = asyncio.Lock()
 
         self.observer = Observer()
         self.event_handler = SkillChangeHandler(self)
@@ -63,10 +63,13 @@ class SkillsLoader:
                 self._observer_started = False
 
     async def load_skills(self) -> str:
-        if self._async_lock is None:
-            self._async_lock = asyncio.Lock()
+        # Fast-path check without acquiring the async lock
+        with self._lock:
+            if self._cache_load_skills is not None:
+                return self._cache_load_skills
 
         async with self._async_lock:
+            # Re-check after acquiring the lock to handle concurrent reloads
             with self._lock:
                 if self._cache_load_skills is not None:
                     return self._cache_load_skills
