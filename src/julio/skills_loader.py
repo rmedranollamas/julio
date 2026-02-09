@@ -20,6 +20,7 @@ class SkillsLoader:
         self._cache_load_skills: Optional[str] = None
         self._cache_resources: Dict[str, Dict[str, str]] = {}
         self._lock = threading.Lock()
+        self._async_lock = asyncio.Lock()
 
         self.observer = Observer()
         self.event_handler = SkillChangeHandler(self)
@@ -62,53 +63,88 @@ class SkillsLoader:
                 self._observer_started = False
 
     async def load_skills(self) -> str:
+        # Fast-path check without acquiring the async lock
         with self._lock:
             if self._cache_load_skills is not None:
                 return self._cache_load_skills
 
-        def _get_skill_paths():
-            if not os.path.exists(self.skills_path):
-                return []
-            paths = []
-            try:
-                with os.scandir(self.skills_path) as it:
-                    for entry in it:
-                        if entry.is_dir():
-                            skill_md_path = os.path.join(entry.path, "SKILL.md")
-                            if os.path.exists(skill_md_path):
-                                paths.append((entry.name, skill_md_path))
-            except OSError:
-                pass
-            return paths
+        async with self._async_lock:
+            # Re-check after acquiring the lock to handle concurrent reloads
+            with self._lock:
+                if self._cache_load_skills is not None:
+                    return self._cache_load_skills
 
-        skill_info = await asyncio.to_thread(_get_skill_paths)
-        if not skill_info:
-            return ""
-
-        def _read_batch(batch):
-            results = []
-            for item, path in batch:
+            def _get_skill_paths():
+                if not os.path.exists(self.skills_path):
+                    return []
+                paths = []
                 try:
-                    with open(path, "r") as f:
-                        content = f.read()
-                        results.append(f"### Skill: {item}\n{content}")
+                    with os.scandir(self.skills_path) as it:
+                        for entry in it:
+                            if entry.is_dir():
+                                skill_md_path = os.path.join(entry.path, "SKILL.md")
+                                if os.path.exists(skill_md_path):
+                                    paths.append((entry.name, skill_md_path))
                 except OSError:
                     pass
-            return results
+                return paths
 
-        # Batching to reduce thread pool overhead
-        batch_size = 100
-        batches = [
-            skill_info[i : i + batch_size]
-            for i in range(0, len(skill_info), batch_size)
-        ]
+            skill_info = await asyncio.to_thread(_get_skill_paths)
+            if not skill_info:
+                return ""
 
-        tasks = [asyncio.to_thread(_read_batch, batch) for batch in batches]
-        batch_results = await asyncio.gather(*tasks)
+            # Check granular cache
+            skills_to_read = []
+            with self._lock:
+                for name, path in skill_info:
+                    if (
+                        name not in self._cache_resources
+                        or "SKILL.md" not in self._cache_resources[name]
+                    ):
+                        skills_to_read.append((name, path))
 
-        skills_content = [item for sublist in batch_results for item in sublist]
+            if skills_to_read:
 
-        result = "\n\n".join(["## Available Skills", *skills_content])
-        with self._lock:
-            self._cache_load_skills = result
-        return result
+                def _read_batch(batch):
+                    results = []
+                    for name, path in batch:
+                        try:
+                            with open(path, "r") as f:
+                                content = f.read()
+                                results.append((name, content))
+                        except OSError:
+                            pass
+                    return results
+
+                # Batching to reduce thread pool overhead
+                batch_size = 100
+                batches = [
+                    skills_to_read[i : i + batch_size]
+                    for i in range(0, len(skills_to_read), batch_size)
+                ]
+
+                tasks = [asyncio.to_thread(_read_batch, batch) for batch in batches]
+                batch_results = await asyncio.gather(*tasks)
+
+                newly_read = [item for sublist in batch_results for item in sublist]
+                with self._lock:
+                    for name, content in newly_read:
+                        if name not in self._cache_resources:
+                            self._cache_resources[name] = {}
+                        self._cache_resources[name]["SKILL.md"] = content
+
+            # Reconstruct from cache in original order
+            skills_content = []
+            with self._lock:
+                for name, _ in skill_info:
+                    if (
+                        name in self._cache_resources
+                        and "SKILL.md" in self._cache_resources[name]
+                    ):
+                        content = self._cache_resources[name]["SKILL.md"]
+                        skills_content.append(f"### Skill: {name}\n{content}")
+
+            result = "\n\n".join(["## Available Skills", *skills_content])
+            with self._lock:
+                self._cache_load_skills = result
+            return result
