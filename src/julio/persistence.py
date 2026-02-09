@@ -23,18 +23,18 @@ class Persistence:
 
     def __init__(self, db_path: str):
         self.db_path = db_path
-        # SqliteSessionService handles its own schema initialization on connect.
-        self.session_service = SqliteSessionService(db_path=db_path)
+        # Use OptimizedSqliteSessionService to share the database connection
+        self.session_service = OptimizedSqliteSessionService(db_path=db_path, persistence=self)
         self._db = None
 
-    async def _get_db(self):
+    async def get_connection(self):
         if self._db is None:
             self._db = await aiosqlite.connect(self.db_path)
         return self._db
 
     async def get_history(self, source_id: str, user_id: str):
         """Asynchronous database call to get history."""
-        db = await self._get_db()
+        db = await self.get_connection()
         query = "SELECT event_data FROM events WHERE session_id = ? AND user_id = ? ORDER BY timestamp DESC LIMIT 10"
         async with db.execute(query, (source_id, user_id)) as cursor:
             rows = await cursor.fetchall()
