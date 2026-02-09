@@ -30,12 +30,12 @@ async def test_read_file_nonexistent(tmp_path):
     assert "Error reading file" in result
 
 @pytest.mark.asyncio
-async def test_write_file_error():
+async def test_write_file_error(tmp_path):
     # Attempt to write to a path that is a directory
-    path = "/tmp/test_dir_write"
-    os.makedirs(path, exist_ok=True)
+    path = tmp_path / "test_dir_write"
+    path.mkdir(exist_ok=True)
     try:
-        result = await write_file(path, "content")
+        result = await write_file(str(path), "content")
         assert "Error writing file" in result
     finally:
         shutil.rmtree(path)
