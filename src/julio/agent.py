@@ -104,14 +104,12 @@ class AgentWrapper:
                         needs_input = True
                         if "question" in part.function_call.args:
                             q = part.function_call.args["question"]
-                            if assistant_parts:
-                                assistant_text += "".join(assistant_parts)
-                                assistant_parts = []
+                            assistant_text += "".join(assistant_parts)
+                            assistant_parts = []
                             if q not in assistant_text:
                                 assistant_text += f"\n{q}"
 
-        if assistant_parts:
-            assistant_text += "".join(assistant_parts)
+        assistant_text += "".join(assistant_parts)
 
         if "[NEEDS_INPUT]" in assistant_text:
             needs_input = True
