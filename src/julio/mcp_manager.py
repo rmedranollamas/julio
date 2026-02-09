@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from typing import List, Tuple, Any
+from typing import List, Tuple, Any, Dict
 from mcp import StdioServerParameters
 from google.adk.tools.mcp_tool.mcp_toolset import (
     McpToolset,
@@ -22,6 +22,8 @@ class MCPManager:
         self.managed_servers: List[Tuple[McpToolset, str]] = []
         self._tasks: List[asyncio.Task] = []
         self._stop_event = asyncio.Event()
+        self._cache: Dict[str, List[Any]] = {}
+        self._cache_lock = asyncio.Lock()
 
         # Initialize toolsets
         for config in self.configs:
@@ -74,7 +76,12 @@ class MCPManager:
             try:
                 # Use public get_tools() to ensure connection is established and alive.
                 # This avoids relying on private attributes of McpToolset.
-                await toolset.get_tools()
+                tools = await toolset.get_tools()
+
+                # Update cache
+                processed = self._process_tools(tools, name)
+                async with self._cache_lock:
+                    self._cache[name] = processed
 
                 # Wait for next check or stop event
                 try:
@@ -101,6 +108,24 @@ class MCPManager:
         """Returns the list of managed toolsets."""
         return [toolset for toolset, _ in self.managed_servers]
 
+    def _process_tools(self, tools: List[Any], name: str) -> List[Any]:
+        """Processes raw tools into tool declarations."""
+        processed = []
+        for tool in tools:
+            # Handle McpTool objects vs raw declarations
+            if hasattr(tool, "_get_declaration"):
+                try:
+                    decl = tool._get_declaration()
+                    if hasattr(decl, "model_dump"):
+                        processed.append(decl.model_dump())
+                    else:
+                        processed.append(decl)
+                except Exception as e:
+                    logger.error(f"Error extracting declaration for tool from {name}: {e}")
+            else:
+                processed.append(tool)
+        return processed
+
     async def get_tools(self) -> List[Any]:
         """
         Calls get_tools() on all managed McpToolset instances in parallel
@@ -109,33 +134,37 @@ class MCPManager:
         if not self.managed_servers:
             return []
 
-        tasks = [toolset.get_tools() for toolset, _ in self.managed_servers]
+        all_tools = []
+        missing = []
+
+        async with self._cache_lock:
+            for toolset, name in self.managed_servers:
+                if name in self._cache:
+                    all_tools.extend(self._cache[name])
+                else:
+                    missing.append((toolset, name))
+
+        if not missing:
+            return all_tools
+
+        tasks = [toolset.get_tools() for toolset, _ in missing]
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
-        all_tools = []
-        for i, result in enumerate(results):
-            name = self.managed_servers[i][1]
-            if isinstance(result, Exception):
-                logger.error(f"Failed to get tools from MCP server {name}: {result}")
-                continue
+        async with self._cache_lock:
+            for i, result in enumerate(results):
+                name = missing[i][1]
+                if isinstance(result, Exception):
+                    logger.error(f"Failed to get tools from MCP server {name}: {result}")
+                    continue
 
-            for tool in result:
-                # Handle McpTool objects vs raw declarations
-                if hasattr(tool, "_get_declaration"):
-                    try:
-                        decl = tool._get_declaration()
-                        if hasattr(decl, "model_dump"):
-                            all_tools.append(decl.model_dump())
-                        else:
-                            all_tools.append(decl)
-                    except Exception as e:
-                        logger.error(
-                            f"Error extracting declaration for tool from {name}: {e}"
-                        )
-                else:
-                    all_tools.append(tool)
+                processed = self._process_tools(result, name)
+                self._cache[name] = processed
 
-        return all_tools
+            # Re-assemble to maintain managed_servers order
+            final_tools = []
+            for _, name in self.managed_servers:
+                final_tools.extend(self._cache.get(name, []))
+            return final_tools
 
     async def list_tools(self) -> List[Any]:
         """Alias for get_tools() to satisfy unit tests."""
