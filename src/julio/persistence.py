@@ -1,4 +1,4 @@
-from google.adk.sessions.sqlite_session_service import SqliteSessionService
+from google.adk.sessions.sqlite_session_service import SqliteSessionService, CREATE_SCHEMA_SQL
 import aiosqlite
 import json
 from contextlib import asynccontextmanager
@@ -31,7 +31,7 @@ class Persistence:
         if self._db is None:
             self._db = await aiosqlite.connect(self.db_path)
             # Ensure the schema is created on the first connection.
-            await self._db.executescript(SqliteSessionService.CREATE_SCHEMA_SQL)
+            await self._db.executescript(CREATE_SCHEMA_SQL)
             await self._db.commit()
         return self._db
 
