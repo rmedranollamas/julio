@@ -35,7 +35,7 @@ class SkillsLoader:
                     )
                     self.observer.start()
                     self._observer_started = True
-                except Exception:
+                except OSError:
                     # Could fail if directory is deleted right after check
                     pass
 
@@ -77,7 +77,7 @@ class SkillsLoader:
                             skill_md_path = os.path.join(entry.path, "SKILL.md")
                             if os.path.exists(skill_md_path):
                                 paths.append((entry.name, skill_md_path))
-            except Exception:
+            except OSError:
                 pass
             return paths
 
@@ -92,7 +92,7 @@ class SkillsLoader:
                     with open(path, "r") as f:
                         content = f.read()
                         results.append(f"### Skill: {item}\n{content}")
-                except Exception:
+                except OSError:
                     pass
             return results
 
