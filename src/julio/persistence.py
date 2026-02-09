@@ -30,6 +30,9 @@ class Persistence:
     async def get_connection(self):
         if self._db is None:
             self._db = await aiosqlite.connect(self.db_path)
+            # Ensure the schema is created on the first connection.
+            await self._db.executescript(SqliteSessionService.CREATE_SCHEMA_SQL)
+            await self._db.commit()
         return self._db
 
     async def get_history(self, source_id: str, user_id: str):
