@@ -46,6 +46,6 @@ async def test_agent_run():
 
     mock_runner.run_async.side_effect = mock_gen
 
-    result = await wrapper.run_with_runner(mock_runner, "user1", "session1", "hello")
+    result = await wrapper.process_command(mock_runner, "session1", "user1", "hello")
     assert result["content"] == "ADK Response [NEEDS_INPUT]"
     assert result["needs_input"] is True

@@ -87,6 +87,7 @@ class AgentWrapper:
     ) -> Dict[str, Any]:
         new_message = types.Content(role="user", parts=[types.Part(text=content)])
 
+        assistant_parts = []
         assistant_text = ""
         needs_input = False
         async for event in runner.run_async(
@@ -95,7 +96,7 @@ class AgentWrapper:
             if event.author == self.agent.name and event.content:
                 for part in event.content.parts:
                     if part.text:
-                        assistant_text += part.text
+                        assistant_parts.append(part.text)
                     if (
                         part.function_call
                         and part.function_call.name == "request_user_input"
@@ -103,8 +104,14 @@ class AgentWrapper:
                         needs_input = True
                         if "question" in part.function_call.args:
                             q = part.function_call.args["question"]
+                            if assistant_parts:
+                                assistant_text += "".join(assistant_parts)
+                                assistant_parts = []
                             if q not in assistant_text:
                                 assistant_text += f"\n{q}"
+
+        if assistant_parts:
+            assistant_text += "".join(assistant_parts)
 
         if "[NEEDS_INPUT]" in assistant_text:
             needs_input = True

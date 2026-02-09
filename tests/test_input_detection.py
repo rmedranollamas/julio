@@ -42,7 +42,7 @@ async def test_input_detection_tool_call():
 
     mock_runner.run_async.side_effect = mock_gen
 
-    result = await wrapper.run_with_runner(mock_runner, "user1", "session1", "hello")
+    result = await wrapper.process_command(mock_runner, "session1", "user1", "hello")
     assert "What is your name?" in result["content"]
     assert result["needs_input"] is True
 
@@ -76,7 +76,7 @@ async def test_input_detection_keyword():
 
     mock_runner.run_async.side_effect = mock_gen
 
-    result = await wrapper.run_with_runner(mock_runner, "user1", "session1", "hello")
+    result = await wrapper.process_command(mock_runner, "session1", "user1", "hello")
     assert "I need more info [NEEDS_INPUT]" in result["content"]
     assert result["needs_input"] is True
 
@@ -108,6 +108,6 @@ async def test_input_detection_none():
 
     mock_runner.run_async.side_effect = mock_gen
 
-    result = await wrapper.run_with_runner(mock_runner, "user1", "session1", "hello")
+    result = await wrapper.process_command(mock_runner, "session1", "user1", "hello")
     assert result["content"] == "Everything is fine."
     assert result["needs_input"] is False
