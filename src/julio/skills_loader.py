@@ -62,6 +62,10 @@ class SkillsLoader:
                 self._observer_started = False
 
     async def load_skills(self) -> str:
+        with self._lock:
+            if self._cache_load_skills is not None:
+                return self._cache_load_skills
+
         def _get_skill_paths():
             if not os.path.exists(self.skills_path):
                 return []
@@ -104,9 +108,7 @@ class SkillsLoader:
 
         skills_content = [item for sublist in batch_results for item in sublist]
 
-        if not skills_content:
-            pass
-        else:
-            "\n\n".join(["## Available Skills", *skills_content])
-
-        return "\n\n".join(["## Available Skills", *skills_content])
+        result = "\n\n".join(["## Available Skills", *skills_content])
+        with self._lock:
+            self._cache_load_skills = result
+        return result
