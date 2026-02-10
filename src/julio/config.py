@@ -14,7 +14,7 @@ class MCPServerConfig(BaseModel):
 
 
 class AgentConfig(BaseSettings):
-    gemini_api_key: str
+    gemini_api_key: Optional[str] = None
     mcp_servers: List[MCPServerConfig] = Field(default_factory=list)
     skills_path: str = "./skills"
     db_path: str = "agent.db"

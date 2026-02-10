@@ -1,5 +1,5 @@
 import os
-from typing import List, Dict, Any
+from typing import Dict, Any
 from google.adk.agents import LlmAgent
 from google.genai import types
 from . import tools_internal
@@ -27,7 +27,12 @@ class AgentWrapper:
         self.agent = None
 
         # Set API key for google-genai
-        os.environ["GOOGLE_API_KEY"] = self.config.gemini_api_key
+        if self.config.gemini_api_key:
+            os.environ["GOOGLE_API_KEY"] = self.config.gemini_api_key
+        else:
+            # Set a placeholder to prevent initialization errors if not provided yet.
+            # Actual calls will fail later with a proper error if still missing.
+            os.environ.setdefault("GOOGLE_API_KEY", "MISSING_API_KEY")
 
     async def initialize(self):
         if not self.agent:
