@@ -10,6 +10,11 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-install-project
 
+# Copy source code and install the project
+COPY src ./src
+COPY README.md ./
+RUN uv sync --frozen
+
 # Stage 2: Runtime
 FROM python:3.12-slim
 
