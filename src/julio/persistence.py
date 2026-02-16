@@ -1,5 +1,6 @@
 from google.adk.sessions.sqlite_session_service import SqliteSessionService, CREATE_SCHEMA_SQL
 import aiosqlite
+import asyncio
 import json
 from contextlib import asynccontextmanager
 
@@ -41,9 +42,14 @@ class Persistence:
         query = "SELECT event_data FROM events WHERE session_id = ? AND user_id = ? ORDER BY timestamp DESC LIMIT 10"
         async with db.execute(query, (source_id, user_id)) as cursor:
             rows = await cursor.fetchall()
-            history = [json.loads(row[0]) for row in rows]
+            loop = asyncio.get_running_loop()
+            history = await loop.run_in_executor(None, self._parse_json_rows, rows)
 
         return history
+
+    @staticmethod
+    def _parse_json_rows(rows):
+        return [json.loads(row[0]) for row in rows]
 
     async def close(self):
         if self._db:
