@@ -20,6 +20,7 @@ class AgentConfig(BaseSettings):
     db_path: str = "agent.db"
     heartbeat_interval_minutes: float = 5.0
     shell_command_timeout: float = 30.0
+    bus_max_tasks: int = 1000
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
