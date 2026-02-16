@@ -30,6 +30,27 @@ async def test_read_file_nonexistent(tmp_path):
     assert "Error reading file" in result
 
 @pytest.mark.asyncio
+async def test_read_file_offset_length(tmp_path):
+    test_file = tmp_path / "test.txt"
+    test_file.write_text("0123456789")
+
+    # Read all
+    result = await read_file(str(test_file))
+    assert result == "0123456789"
+
+    # Read with length
+    result = await read_file(str(test_file), length=5)
+    assert result == "01234"
+
+    # Read with offset
+    result = await read_file(str(test_file), offset=5)
+    assert result == "56789"
+
+    # Read with offset and length
+    result = await read_file(str(test_file), offset=2, length=3)
+    assert result == "234"
+
+@pytest.mark.asyncio
 async def test_write_file_error(tmp_path):
     # Attempt to write to a path that is a directory
     path = tmp_path / "test_dir_write"

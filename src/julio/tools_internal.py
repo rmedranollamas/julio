@@ -1,5 +1,6 @@
 import asyncio
 import os
+from typing import Optional
 
 
 async def run_shell_command(command: str, timeout: float = 30.0) -> str:
@@ -36,13 +37,34 @@ async def list_files(path: str = ".") -> str:
         return f"Error listing files: {str(e)}"
 
 
-async def read_file(path: str) -> str:
-    """Reads the content of a file."""
+async def read_file(path: str, offset: int = 0, length: Optional[int] = None) -> str:
+    """Reads the content of a file.
+
+    Args:
+        path: Path to the file.
+        offset: Byte offset to start reading from.
+        length: Maximum number of characters to read. If None, reads the whole file.
+    """
     try:
 
         def _read():
-            with open(path, "r") as f:
-                return f.read()
+            with open(path, "r", encoding="utf-8", errors="replace") as f:
+                if offset > 0:
+                    f.seek(offset)
+
+                if length is not None:
+                    return f.read(length)
+
+                # Use chunked reading for large files even when no length is specified
+                # to avoid potential issues with very large single read calls,
+                # although the final string will still be in memory.
+                chunks = []
+                while True:
+                    chunk = f.read(65536)
+                    if not chunk:
+                        break
+                    chunks.append(chunk)
+                return "".join(chunks)
 
         return await asyncio.to_thread(_read)
     except Exception as e:
