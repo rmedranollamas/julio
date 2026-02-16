@@ -23,11 +23,18 @@ async def benchmark():
 
     persistence = Persistence(db_path)
     # Ensure DB is created and has some data
-    db = await persistence._get_db()
-    await db.execute("CREATE TABLE IF NOT EXISTS events (session_id TEXT, user_id TEXT, event_data TEXT, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)")
+    db = await persistence.get_connection()
+    # The schema is already created by Persistence.get_connection()
+    # Insert required session first due to foreign key constraints
+    await db.execute(
+        "INSERT OR IGNORE INTO sessions (app_name, user_id, id, state, create_time, update_time) VALUES (?, ?, ?, ?, ?, ?)",
+        ("app", "user1", "session1", "{}", 0, 0)
+    )
     for i in range(10):
-        await db.execute("INSERT INTO events (session_id, user_id, event_data) VALUES (?, ?, ?)",
-                         ("session1", "user1", '{"event": "data"}'))
+        await db.execute(
+            "INSERT INTO events (id, app_name, user_id, session_id, invocation_id, timestamp, event_data) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (f"id{i}", "app", "user1", "session1", "inv", 0, '{"event": "data"}')
+        )
     await db.commit()
 
     skills_loader = AsyncMock()
