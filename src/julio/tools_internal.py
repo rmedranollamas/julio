@@ -12,7 +12,7 @@ async def run_shell_command(command: str, timeout: float = 30.0) -> str:
         stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout)
 
         def _decode():
-            return f"STDOUT:\n{stdout.decode()}\nSTDERR:\n{stderr.decode()}"
+            return f"STDOUT:\n{stdout.decode(errors='replace')}\nSTDERR:\n{stderr.decode(errors='replace')}"
 
         return await asyncio.to_thread(_decode)
     except asyncio.TimeoutError:
