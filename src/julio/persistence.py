@@ -27,14 +27,24 @@ class Persistence:
         # Use OptimizedSqliteSessionService to share the database connection
         self.session_service = OptimizedSqliteSessionService(db_path=db_path, persistence=self)
         self._db = None
+        self._lock = asyncio.Lock()
 
     async def get_connection(self):
-        if self._db is None:
-            self._db = await aiosqlite.connect(self.db_path)
-            # Ensure the schema is created on the first connection.
-            await self._db.executescript(CREATE_SCHEMA_SQL)
-            await self._db.commit()
-        return self._db
+        if self._db is not None:
+            return self._db
+
+        async with self._lock:
+            if self._db is None:
+                db = await aiosqlite.connect(self.db_path)
+                try:
+                    # Ensure the schema is created on the first connection.
+                    await db.executescript(CREATE_SCHEMA_SQL)
+                    await db.commit()
+                    self._db = db
+                except Exception:
+                    await db.close()
+                    raise
+            return self._db
 
     async def get_history(self, source_id: str, user_id: str):
         """Asynchronous database call to get history."""
@@ -52,6 +62,7 @@ class Persistence:
         return [json.loads(row[0]) for row in rows]
 
     async def close(self):
-        if self._db:
-            await self._db.close()
-            self._db = None
+        async with self._lock:
+            if self._db:
+                await self._db.close()
+                self._db = None
