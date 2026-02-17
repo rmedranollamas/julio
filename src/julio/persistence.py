@@ -35,10 +35,15 @@ class Persistence:
 
         async with self._lock:
             if self._db is None:
-                self._db = await aiosqlite.connect(self.db_path)
-                # Ensure the schema is created on the first connection.
-                await self._db.executescript(CREATE_SCHEMA_SQL)
-                await self._db.commit()
+                db = await aiosqlite.connect(self.db_path)
+                try:
+                    # Ensure the schema is created on the first connection.
+                    await db.executescript(CREATE_SCHEMA_SQL)
+                    await db.commit()
+                    self._db = db
+                except Exception:
+                    await db.close()
+                    raise
             return self._db
 
     async def get_history(self, source_id: str, user_id: str):
@@ -52,6 +57,7 @@ class Persistence:
         return history
 
     async def close(self):
-        if self._db:
-            await self._db.close()
-            self._db = None
+        async with self._lock:
+            if self._db:
+                await self._db.close()
+                self._db = None
