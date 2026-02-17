@@ -35,8 +35,12 @@ async def run_shell_command(command: str, timeout: float = 30.0) -> str:
 async def list_files(path: str = ".") -> str:
     """Lists files in the specified directory."""
     try:
-        files = await asyncio.to_thread(os.listdir, path)
-        return "\n".join(files)
+
+        def _list():
+            with os.scandir(path) as it:
+                return "\n".join(entry.name for entry in it)
+
+        return await asyncio.to_thread(_list)
     except Exception as e:
         return f"Error listing files: {str(e)}"
 
