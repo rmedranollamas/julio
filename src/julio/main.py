@@ -30,8 +30,9 @@ class AgentService:
         # Calling an internal method just to ensure it's ready if we wanted to be explicit:
         # await self.persistence._get_db()
 
-        # 2. Start MCP Manager
+        # 2. Start MCP Manager and Message Bus
         await self.mcp_manager.start()
+        await self.bus.start()
 
         # 3. Create AgentWrapper
         self.agent_wrapper = await AgentWrapper.create(

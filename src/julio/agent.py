@@ -1,10 +1,10 @@
 import os
+import functools
 from typing import Dict, Any
 from google.adk.agents import LlmAgent
 from google.genai import types
 from . import tools_internal
 from .config import AgentConfig
-import functools
 from .mcp_manager import MCPManager
 
 
@@ -24,7 +24,7 @@ class AgentWrapper:
         self.skills_loader = skills_loader
         self.mcp_manager = mcp_manager
         self.persistence = persistence
-        self.agent = None
+        self.agent: LlmAgent | None = None
 
         # Set API key for google-genai
         if self.config.gemini_api_key:
@@ -35,6 +35,7 @@ class AgentWrapper:
             os.environ.setdefault("GOOGLE_API_KEY", "MISSING_API_KEY")
 
     async def initialize(self):
+        """Initializes the underlying ADK agent."""
         if not self.agent:
             self.agent = await self._create_agent()
 
@@ -46,12 +47,13 @@ class AgentWrapper:
         mcp_manager: MCPManager,
         persistence: Any,
     ):
+        """Factory method to create and initialize an AgentWrapper."""
         instance = cls(config, skills_loader, mcp_manager, persistence)
         await instance.initialize()
         return instance
 
     async def _create_agent(self) -> LlmAgent:
-        # 1. Internal tools
+        # 1. Internal tools with configuration applied
         @functools.wraps(tools_internal.run_shell_command)
         async def run_shell_command(command: str) -> str:
             return await tools_internal.run_shell_command(
@@ -66,18 +68,18 @@ class AgentWrapper:
             tools_internal.request_user_input,
         ]
 
-        # 2. MCP Toolsets from Manager
+        # 2. Add MCP Toolsets from the manager
         tools.extend(self.mcp_manager.get_toolsets())
 
-        # 3. Instructions from skills
+        # 3. Load dynamic skills instructions
         skills_prompt = await self.skills_loader.load_skills()
         instruction = (
             "You are a helpful agent service running on a Linux machine.\n"
-            f"{skills_prompt}\n"
-            "If you need more information from the user or need them to make a decision, "
-            "use the `request_user_input` tool. "
-            "Alternatively, if you are simply waiting for user feedback before continuing, "
-            "end your response with [NEEDS_INPUT]."
+            f"{skills_prompt}\n\n"
+            "Guidelines:\n"
+            "- Use 'request_user_input' if you need the user to make a decision or provide more info.\n"
+            "- If you are waiting for feedback without a tool call, end your response with [NEEDS_INPUT].\n"
+            "- Be concise and professional."
         )
 
         return LlmAgent(
@@ -90,11 +92,13 @@ class AgentWrapper:
     async def process_command(
         self, runner: Any, source_id: str, user_id: str, content: str
     ) -> Dict[str, Any]:
+        """Processes a user command through the ADK runner and handles output aggregation."""
         new_message = types.Content(role="user", parts=[types.Part(text=content)])
 
         assistant_parts = []
         assistant_text = ""
         needs_input = False
+
         async for event in runner.run_async(
             user_id=user_id, session_id=source_id, new_message=new_message
         ):
@@ -109,10 +113,13 @@ class AgentWrapper:
                         needs_input = True
                         if "question" in part.function_call.args:
                             q = part.function_call.args["question"]
-                            assistant_text += "".join(assistant_parts)
+                            # Aggregate current parts and append question if missing
+                            current_text = "".join(assistant_parts)
                             assistant_parts = []
-                            if q not in assistant_text:
-                                assistant_text += f"\n{q}"
+                            if q not in assistant_text and q not in current_text:
+                                assistant_text += f"{current_text}\n{q}"
+                            else:
+                                assistant_text += current_text
 
         assistant_text += "".join(assistant_parts)
 
@@ -122,6 +129,6 @@ class AgentWrapper:
         return {
             "source_id": source_id,
             "user_id": user_id,
-            "content": assistant_text,
+            "content": assistant_text.strip(),
             "needs_input": needs_input,
         }
