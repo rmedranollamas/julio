@@ -57,8 +57,15 @@ class Persistence:
         )
         async with db.execute(query, (session_id, user_id, limit)) as cursor:
             rows = await cursor.fetchall()
-            # ADK stores event_data as JSON
-            return [json.loads(row[0]) for row in rows]
+            # ADK stores event_data as JSON.
+            # Offload JSON deserialization to a thread to avoid blocking the event loop.
+            if not rows:
+                return []
+
+            def _parse_rows(rows_to_parse):
+                return [json.loads(row[0]) for row in rows_to_parse]
+
+            return await asyncio.to_thread(_parse_rows, rows)
 
     async def close(self):
         """Closes the shared database connection."""
