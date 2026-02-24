@@ -53,7 +53,7 @@ class MessageBus:
                     self._queue.put_nowait((callback, message))
                 except asyncio.QueueFull:
                     logger.warning(
-                        f"Message bus queue full ({self._queue.maxsize}), dropping message for channel: {channel}"
+                        f"Message bus queue full, dropping message for channel: {channel}"
                     )
 
     async def subscribe_to_commands(
