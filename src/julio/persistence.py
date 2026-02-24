@@ -41,11 +41,10 @@ class Persistence:
                 try:
                     await db.executescript(CREATE_SCHEMA_SQL)
                     # Create index for optimized history retrieval
-                    CREATE_INDEX_SQL = (
+                    await db.execute(
                         "CREATE INDEX IF NOT EXISTS idx_events_session_user_timestamp "
                         "ON events (session_id, user_id, timestamp DESC)"
                     )
-                    await db.execute(CREATE_INDEX_SQL)
                     await db.commit()
                     self._db = db
                 except Exception:

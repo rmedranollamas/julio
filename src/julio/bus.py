@@ -11,9 +11,7 @@ class MessageBus:
     Replaces Redis for single-process environments.
     """
 
-    def __init__(
-        self, max_tasks: int = 1000, max_queue_size: int = 0, *args, **kwargs
-    ):
+    def __init__(self, max_tasks: int = 1000, max_queue_size: int = 0, *args, **kwargs):
         # We accept args/kwargs for compatibility with previous Redis-based init
         self._subscribers: Dict[str, List[Callable[[dict], Awaitable[None]]]] = {}
         self._queue: asyncio.Queue = asyncio.Queue(maxsize=max_queue_size)
@@ -53,7 +51,7 @@ class MessageBus:
                     self._queue.put_nowait((callback, message))
                 except asyncio.QueueFull:
                     logger.warning(
-                        f"Message bus queue full, dropping message for channel: {channel}"
+                        f"Message bus queue full ({self._queue.maxsize}), dropping message for channel: {channel}"
                     )
 
     async def subscribe_to_commands(

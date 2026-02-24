@@ -95,9 +95,9 @@ class AgentWrapper:
         """Processes a user command through the ADK runner and handles output aggregation."""
         new_message = types.Content(role="user", parts=[types.Part(text=content)])
 
-        assistant_parts = []
         assistant_text_parts = []
         needs_input = False
+        seen_questions = set()
 
         async for event in runner.run_async(
             user_id=user_id, session_id=source_id, new_message=new_message
@@ -105,7 +105,8 @@ class AgentWrapper:
             if event.author == self.agent.name and event.content:
                 for part in event.content.parts:
                     if part.text:
-                        assistant_parts.append(part.text)
+                        assistant_text_parts.append(part.text)
+
                     if (
                         part.function_call
                         and part.function_call.name == "request_user_input"
@@ -113,18 +114,11 @@ class AgentWrapper:
                         needs_input = True
                         if "question" in part.function_call.args:
                             q = part.function_call.args["question"]
-                            # Aggregate current parts and append question if missing
-                            current_text = "".join(assistant_parts)
-                            assistant_parts = []
+                            if q not in seen_questions:
+                                assistant_text_parts.append(f"\n{q}")
+                                seen_questions.add(q)
 
-                            # Deduplication check: check if question is in any previous chunks or current text
-                            if not any(q in chunk for chunk in assistant_text_parts) and q not in current_text:
-                                assistant_text_parts.append(f"{current_text}\n{q}")
-                            else:
-                                assistant_text_parts.append(current_text)
-
-        assistant_text_parts.append("".join(assistant_parts))
-        assistant_text = "".join(assistant_text_parts)
+        assistant_text = "".join(assistant_text_parts).strip()
 
         if "[NEEDS_INPUT]" in assistant_text:
             needs_input = True
@@ -132,6 +126,6 @@ class AgentWrapper:
         return {
             "source_id": source_id,
             "user_id": user_id,
-            "content": assistant_text.strip(),
+            "content": assistant_text,
             "needs_input": needs_input,
         }
