@@ -96,7 +96,7 @@ class AgentWrapper:
         new_message = types.Content(role="user", parts=[types.Part(text=content)])
 
         assistant_parts = []
-        assistant_text = ""
+        assistant_text_parts = []
         needs_input = False
 
         async for event in runner.run_async(
@@ -116,12 +116,15 @@ class AgentWrapper:
                             # Aggregate current parts and append question if missing
                             current_text = "".join(assistant_parts)
                             assistant_parts = []
-                            if q not in assistant_text and q not in current_text:
-                                assistant_text += f"{current_text}\n{q}"
-                            else:
-                                assistant_text += current_text
 
-        assistant_text += "".join(assistant_parts)
+                            # Deduplication check: check if question is in any previous chunks or current text
+                            if not any(q in chunk for chunk in assistant_text_parts) and q not in current_text:
+                                assistant_text_parts.append(f"{current_text}\n{q}")
+                            else:
+                                assistant_text_parts.append(current_text)
+
+        assistant_text_parts.append("".join(assistant_parts))
+        assistant_text = "".join(assistant_text_parts)
 
         if "[NEEDS_INPUT]" in assistant_text:
             needs_input = True
