@@ -133,7 +133,8 @@ class MCPManager:
             logger.error(f"Failed to fetch tools for {name}: {e}")
         finally:
             async with self._cache_lock:
-                self._in_progress_fetches.pop(name, None)
+                if self._in_progress_fetches.get(name) == asyncio.current_task():
+                    self._in_progress_fetches.pop(name, None)
 
     async def get_tools(self) -> List[Any]:
         """
