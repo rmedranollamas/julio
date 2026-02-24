@@ -40,6 +40,11 @@ class Persistence:
                 db = await aiosqlite.connect(self.db_path)
                 try:
                     await db.executescript(CREATE_SCHEMA_SQL)
+                    # Create index for optimized history retrieval
+                    await db.execute(
+                        "CREATE INDEX IF NOT EXISTS idx_events_session_user_timestamp "
+                        "ON events (session_id, user_id, timestamp DESC)"
+                    )
                     await db.commit()
                     self._db = db
                 except Exception:
