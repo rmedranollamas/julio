@@ -9,8 +9,10 @@ async def test_bus_bounded_queue(caplog):
     bus = MessageBus(max_tasks=1, max_queue_size=2)
     await bus.start()
 
+    worker_picked_up_event = asyncio.Event()
     results = []
     async def slow_sub(msg):
+        worker_picked_up_event.set()
         await asyncio.sleep(0.1)
         results.append(msg)
 
@@ -20,8 +22,8 @@ async def test_bus_bounded_queue(caplog):
     # The queue is now empty, but worker is busy.
     await bus.publish_response("test", {"id": 1})
 
-    # Give some time for worker to pick it up
-    await asyncio.sleep(0.01)
+    # Wait for the worker to signal it has picked up the message
+    await worker_picked_up_event.wait()
 
     # Second message: goes to queue (size 1/2)
     await bus.publish_response("test", {"id": 2})
