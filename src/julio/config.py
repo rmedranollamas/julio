@@ -21,6 +21,7 @@ class AgentConfig(BaseSettings):
     heartbeat_interval_minutes: float = 5.0
     shell_command_timeout: float = 30.0
     bus_max_tasks: int = 1000
+    bus_max_queue_size: int = 10000
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
