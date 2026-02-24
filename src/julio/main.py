@@ -15,7 +15,10 @@ class AgentService:
     def __init__(self, config_path: str = "agent.json"):
         self.config = load_config(config_path)
         self.persistence = Persistence(self.config.db_path)
-        self.bus = MessageBus(max_tasks=self.config.bus_max_tasks)
+        self.bus = MessageBus(
+            max_tasks=self.config.bus_max_tasks,
+            max_queue_size=self.config.bus_max_queue_size,
+        )
         self.skills_loader = SkillsLoader(self.config.skills_path)
         self.mcp_manager = MCPManager(self.config.mcp_servers)
         self.agent_wrapper = None

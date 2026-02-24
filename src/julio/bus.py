@@ -11,10 +11,12 @@ class MessageBus:
     Replaces Redis for single-process environments.
     """
 
-    def __init__(self, max_tasks: int = 1000, *args, **kwargs):
+    def __init__(
+        self, max_tasks: int = 1000, max_queue_size: int = 0, *args, **kwargs
+    ):
         # We accept args/kwargs for compatibility with previous Redis-based init
         self._subscribers: Dict[str, List[Callable[[dict], Awaitable[None]]]] = {}
-        self._queue: asyncio.Queue = asyncio.Queue()
+        self._queue: asyncio.Queue = asyncio.Queue(maxsize=max_queue_size)
         self._max_tasks = max_tasks
         self._workers: List[asyncio.Task] = []
         self._stop_event = asyncio.Event()
@@ -47,9 +49,12 @@ class MessageBus:
         """Publishes a message to a specific channel."""
         if channel in self._subscribers:
             for callback in self._subscribers[channel]:
-                # We don't want to block the publisher if the queue is full,
-                # but an in-memory queue is practically infinite by default.
-                self._queue.put_nowait((callback, message))
+                try:
+                    self._queue.put_nowait((callback, message))
+                except asyncio.QueueFull:
+                    logger.warning(
+                        f"Message bus queue full ({self._queue.maxsize}), dropping message for channel: {channel}"
+                    )
 
     async def subscribe_to_commands(
         self, channel: str, callback: Callable[[dict], Awaitable[None]]
