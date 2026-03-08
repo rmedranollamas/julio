@@ -177,8 +177,10 @@ class MCPManager:
         if self._tasks:
             await asyncio.gather(*self._tasks, return_exceptions=True)
 
-        for toolset, _ in self.managed_servers:
-            await toolset.close()
+        if self.managed_servers:
+            await asyncio.gather(
+                *(ts.close() for ts, _ in self.managed_servers), return_exceptions=True
+            )
         logger.info("Stopped all MCP keep-alive tasks and closed sessions.")
 
     async def close(self):
