@@ -66,7 +66,11 @@ class Persistence:
             if not rows:
                 return []
 
-            return [json.loads(row[0]) for row in rows]
+            def _parse_rows(rows_to_parse):
+                return [json.loads(row[0]) for row in rows_to_parse]
+
+            # Offload JSON parsing to a thread to avoid blocking the event loop
+            return await asyncio.to_thread(_parse_rows, rows)
 
     async def close(self):
         """Closes the shared database connection."""
