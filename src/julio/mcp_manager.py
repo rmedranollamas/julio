@@ -126,7 +126,8 @@ class MCPManager:
         """Fetches tools from a server, processes them, and updates the cache."""
         try:
             tools = await toolset.get_tools_with_prefix()
-            processed = self._process_tools(tools, name)
+            # Offload CPU-intensive tool processing to a thread to avoid blocking the event loop.
+            processed = await asyncio.to_thread(self._process_tools, tools, name)
             async with self._cache_lock:
                 self._cache[name] = processed
         except Exception as e:
