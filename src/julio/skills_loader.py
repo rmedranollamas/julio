@@ -1,6 +1,7 @@
 import os
 import asyncio
 import threading
+import itertools
 from typing import Dict, Optional
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
@@ -126,9 +127,8 @@ class SkillsLoader:
                 tasks = [asyncio.to_thread(_read_batch, batch) for batch in batches]
                 batch_results = await asyncio.gather(*tasks)
 
-                newly_read = [item for sublist in batch_results for item in sublist]
                 with self._lock:
-                    for name, content in newly_read:
+                    for name, content in itertools.chain.from_iterable(batch_results):
                         if name not in self._cache_resources:
                             self._cache_resources[name] = {}
                         self._cache_resources[name]["SKILL.md"] = content
