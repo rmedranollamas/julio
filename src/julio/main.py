@@ -83,10 +83,16 @@ class AgentService:
     async def heartbeat_loop(self):
         interval = self.config.heartbeat_interval_minutes * 60
         while not self.stop_event.is_set():
-            await asyncio.sleep(interval)
-            if self.stop_event.is_set():
+            try:
+                await asyncio.wait_for(self.stop_event.wait(), timeout=interval)
+            except asyncio.TimeoutError:
+                # Timeout means heartbeat should trigger
+                if self.stop_event.is_set():
+                    break
+                print("Heartbeat trigger")
+            else:
+                # stop_event was set
                 break
-            print("Heartbeat trigger")
             heartbeat_data = {
                 "source_id": "system_heartbeat",
                 "user_id": "system",
