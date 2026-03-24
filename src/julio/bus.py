@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from typing import Callable, Dict, List, Awaitable
+from typing import Callable, Dict, List, Awaitable, Set
 
 logger = logging.getLogger(__name__)
 
@@ -13,7 +13,7 @@ class MessageBus:
 
     def __init__(self, max_tasks: int = 1000, max_queue_size: int = 0, *args, **kwargs):
         # We accept args/kwargs for compatibility with previous Redis-based init
-        self._subscribers: Dict[str, List[Callable[[dict], Awaitable[None]]]] = {}
+        self._subscribers: Dict[str, Set[Callable[[dict], Awaitable[None]]]] = {}
         self._queue: asyncio.Queue = asyncio.Queue(maxsize=max_queue_size)
         self._max_tasks = max_tasks
         self._workers: List[asyncio.Task] = []
@@ -59,8 +59,8 @@ class MessageBus:
     ):
         """Subscribes to a channel and registers a callback."""
         if channel not in self._subscribers:
-            self._subscribers[channel] = []
-        self._subscribers[channel].append(callback)
+            self._subscribers[channel] = set()
+        self._subscribers[channel].add(callback)
 
     async def stop(self):
         """Stops the message bus and its workers."""
