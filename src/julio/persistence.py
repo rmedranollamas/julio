@@ -67,7 +67,7 @@ class Persistence:
                 return []
 
             def _parse_rows(rows_to_parse):
-                return [orjson.loads(row[0]) for row in rows_to_parse]
+                return [orjson.loads(row[0]) for row in rows_to_parse if row[0]]
 
             # Offload JSON parsing to a thread to avoid blocking the event loop
             return await asyncio.to_thread(_parse_rows, rows)
