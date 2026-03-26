@@ -4,7 +4,7 @@ from google.adk.sessions.sqlite_session_service import (
 )
 import aiosqlite
 import asyncio
-import json
+import orjson
 from contextlib import asynccontextmanager
 
 
@@ -67,7 +67,7 @@ class Persistence:
                 return []
 
             def _parse_rows(rows_to_parse):
-                return [json.loads(row[0]) for row in rows_to_parse]
+                return [orjson.loads(row[0]) for row in rows_to_parse]
 
             # Offload JSON parsing to a thread to avoid blocking the event loop
             return await asyncio.to_thread(_parse_rows, rows)
