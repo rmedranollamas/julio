@@ -26,6 +26,8 @@ class MessageBus:
 
     def _maybe_spawn_worker(self):
         """Spawns a new worker task if we haven't reached the limit."""
+        # Clean up finished tasks to allow replacement and restartability
+        self._workers = [t for t in self._workers if not t.done()]
         if len(self._workers) < self._max_tasks:
             worker = asyncio.create_task(self._worker())
             self._workers.append(worker)
