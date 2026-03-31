@@ -33,6 +33,8 @@ class MessageBus:
             self._workers.append(worker)
             return True
         return False
+            return True
+        return False
 
     async def _worker(self):
         """Worker task that processes messages from the queue."""
