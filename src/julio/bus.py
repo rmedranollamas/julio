@@ -11,7 +11,7 @@ class MessageBus:
     Replaces Redis for single-process environments.
     """
 
-    def __init__(self, max_tasks: int = 1000, max_queue_size: int = 0, *args, **kwargs):
+    def __init__(self, max_tasks: int = 50, max_queue_size: int = 0, *args, **kwargs):
         # We accept args/kwargs for compatibility with previous Redis-based init
         self._subscribers: Dict[str, Set[Callable[[dict], Awaitable[None]]]] = {}
         self._queue: asyncio.Queue = asyncio.Queue(maxsize=max_queue_size)
@@ -20,11 +20,21 @@ class MessageBus:
         self._stop_event = asyncio.Event()
 
     async def start(self):
-        """Starts the worker pool."""
-        self._workers = [
-            asyncio.create_task(self._worker()) for _ in range(self._max_tasks)
-        ]
-        logger.info(f"Started {len(self._workers)} message bus workers.")
+        """Starts the worker pool with an initial worker."""
+        self._maybe_spawn_worker()
+        logger.info("Started message bus.")
+
+    def _maybe_spawn_worker(self):
+        """Spawns a new worker task if we haven't reached the limit."""
+        # Clean up finished tasks to allow replacement and restartability
+        self._workers = [t for t in self._workers if not t.done()]
+        if len(self._workers) < self._max_tasks:
+            worker = asyncio.create_task(self._worker())
+            self._workers.append(worker)
+            return True
+        return False
+            return True
+        return False
 
     async def _worker(self):
         """Worker task that processes messages from the queue."""
@@ -46,6 +56,10 @@ class MessageBus:
     async def publish_response(self, channel: str, message: dict):
         """Publishes a message to a specific channel."""
         if channel in self._subscribers:
+            # If the queue is not empty, it might be a sign we need more workers
+            if not self._queue.empty():
+                self._maybe_spawn_worker()
+
             for callback in self._subscribers[channel]:
                 try:
                     self._queue.put_nowait((callback, message))
