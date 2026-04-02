@@ -20,7 +20,10 @@ class AgentService:
             max_queue_size=self.config.bus_max_queue_size,
         )
         self.skills_loader = SkillsLoader(self.config.skills_path)
-        self.mcp_manager = MCPManager(self.config.mcp_servers)
+        self.mcp_manager = MCPManager(
+            self.config.mcp_servers,
+            keep_alive_interval=self.config.mcp_keep_alive_interval_seconds,
+        )
         self.agent_wrapper = None
         self.runner = None
         self.stop_event = asyncio.Event()

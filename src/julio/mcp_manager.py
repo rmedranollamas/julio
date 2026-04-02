@@ -17,8 +17,13 @@ class MCPManager:
     Manages dedicated tasks for MCP services to keep their contexts open.
     """
 
-    def __init__(self, mcp_configs: List[MCPServerConfig]):
+    def __init__(
+        self,
+        mcp_configs: List[MCPServerConfig],
+        keep_alive_interval: float = 300.0,
+    ):
         self.configs = mcp_configs
+        self.keep_alive_interval = keep_alive_interval
         self.managed_servers: List[Tuple[McpToolset, str]] = []
         self._tasks: List[asyncio.Task] = []
         self._stop_event = asyncio.Event()
@@ -81,7 +86,9 @@ class MCPManager:
 
                 # Wait for next check or stop event
                 try:
-                    await asyncio.wait_for(self._stop_event.wait(), timeout=30)
+                    await asyncio.wait_for(
+                        self._stop_event.wait(), timeout=self.keep_alive_interval
+                    )
                     break  # Stop event set
                 except asyncio.TimeoutError:
                     pass  # Continue loop
