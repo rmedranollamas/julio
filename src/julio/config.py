@@ -22,6 +22,7 @@ class AgentConfig(BaseSettings):
     shell_command_timeout: float = 30.0
     bus_max_tasks: int = 50
     bus_max_queue_size: int = 10000
+    mcp_keep_alive_interval_seconds: float = 300.0
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
