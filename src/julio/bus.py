@@ -16,7 +16,7 @@ class MessageBus:
         self._subscribers: Dict[str, Set[Callable[[dict], Awaitable[None]]]] = {}
         self._queue: asyncio.Queue = asyncio.Queue(maxsize=max_queue_size)
         self._max_tasks = max_tasks
-        self._workers: List[asyncio.Task] = []
+        self._workers: Set[asyncio.Task] = set()
         self._stop_event = asyncio.Event()
 
     async def start(self):
@@ -26,13 +26,10 @@ class MessageBus:
 
     def _maybe_spawn_worker(self):
         """Spawns a new worker task if we haven't reached the limit."""
-        # Clean up finished tasks to allow replacement and restartability
-        self._workers = [t for t in self._workers if not t.done()]
         if len(self._workers) < self._max_tasks:
             worker = asyncio.create_task(self._worker())
-            self._workers.append(worker)
-            return True
-        return False
+            self._workers.add(worker)
+            worker.add_done_callback(self._workers.discard)
             return True
         return False
 
