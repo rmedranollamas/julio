@@ -49,7 +49,7 @@ class SkillsLoader:
             else:
                 try:
                     rel_path = os.path.relpath(changed_path, self.skills_path)
-                    skill_name = rel_path.split(os.sep)[0]
+                    skill_name = rel_path.split(os.sep, 1)[0]
                     if skill_name in self._cache_resources:
                         del self._cache_resources[skill_name]
                 except ValueError:
